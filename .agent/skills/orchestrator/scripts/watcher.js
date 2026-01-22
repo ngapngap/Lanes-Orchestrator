@@ -12,20 +12,62 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOG_DIR = path.join(__dirname, '..');
-const POLL_INTERVAL = 200;
+const BASE_LOG_DIR = path.join(process.cwd(), '.agent', 'logs');
+const POLL_INTERVAL = 100;
 
-// Parse agent filter and log type from args
-const agentFilter = process.argv[2] || 'all';
-const logType = process.argv[3] || 'default'; // 'default', 'raw', 'events'
+const args = process.argv.slice(2);
+const noClear = args.includes('--no-clear');
+
+// Find latest run if not specified
+function getLatestRunId() {
+    if (!fs.existsSync(BASE_LOG_DIR)) return null;
+    const runs = fs.readdirSync(BASE_LOG_DIR).sort().reverse();
+    return runs.length > 0 ? runs[0] : null;
+}
+
+// Explicit argument parsing
+const runIdIdx = args.indexOf('--run-id');
+let runId = runIdIdx !== -1 ? args[runIdIdx + 1] : getLatestRunId();
+
+const laneIdx = args.indexOf('--lane');
+let agentFilter = laneIdx !== -1 ? args[laneIdx + 1] : (args.find(a => !a.startsWith('--') && !['raw', 'events'].includes(a)) || 'ui_lane');
+
+const logType = args.find(a => a === 'raw' || a === 'events') || 'default';
+
+// Sanitize inputs
+function sanitizePathPart(part) {
+    if (!part) return part;
+    // Allow alphanumeric, underscores, hyphens, and dots (but no double dots)
+    // Reject path separators
+    if (part.includes('..') || part.includes('/') || part.includes('\\')) {
+        throw new Error(`Invalid path part: ${part}`);
+    }
+    if (!/^[a-z0-9._-]+$/i.test(part)) {
+        throw new Error(`Invalid characters in path part: ${part}`);
+    }
+    return part;
+}
+
+try {
+    runId = sanitizePathPart(runId);
+    agentFilter = sanitizePathPart(agentFilter);
+} catch (e) {
+    console.error(`\x1b[31mError: ${e.message}\x1b[0m`);
+    process.exit(1);
+}
 
 // Get log file based on agent and type
-function getLogFile(agent, type) {
-    const suffix = type === 'raw' ? '_raw.log' : (type === 'events' ? '_events.log' : '_output.log');
-    if (agent === 'all') {
-        return path.join(LOG_DIR, `combined${suffix}`);
+function getLogFile(run, agent, type) {
+    if (!run) return null;
+    const suffix = type === 'raw' ? 'raw.log' : (type === 'events' ? 'events.log' : 'output.log');
+    const logPath = path.join(BASE_LOG_DIR, run, agent, suffix);
+    
+    // Final safety check
+    const resolvedPath = path.resolve(logPath);
+    if (!resolvedPath.startsWith(path.resolve(BASE_LOG_DIR))) {
+        throw new Error('Security Error: Path traversal detected');
     }
-    return path.join(LOG_DIR, `${agent}${suffix}`);
+    return logPath;
 }
 
 // ANSI colors
@@ -49,8 +91,8 @@ const agentColors = {
 };
 
 function printHeader(agent, type) {
-    console.clear();
-    const agentLabel = agent === 'all' ? 'TẤT CẢ AGENTS' : agent.toUpperCase();
+    if (!noClear) console.clear();
+    const agentLabel = agent.toUpperCase();
     const typeLabel = type.toUpperCase();
     const color = agent === 'all' ? colors.blue : (agentColors[agent] || colors.blue);
     console.log(`
@@ -88,7 +130,17 @@ function formatLine(line, type) {
 }
 
 function watchLog(logFile, type) {
+    if (!logFile) {
+        console.error(`${colors.red}Error: Không tìm thấy thư mục log.${colors.reset}`);
+        process.exit(1);
+    }
     printHeader(agentFilter, type);
+
+    // Ensure directory exists
+    const logDir = path.dirname(logFile);
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
 
     // Create log file if not exists
     if (!fs.existsSync(logFile)) {
@@ -98,30 +150,32 @@ function watchLog(logFile, type) {
 
     let lastSize = 0;
 
-    try {
-        const stats = fs.statSync(logFile);
-        lastSize = stats.size;
+    const showInitial = () => {
+        try {
+            const stats = fs.statSync(logFile);
+            lastSize = stats.size;
 
-        if (lastSize > 0) {
-            const content = fs.readFileSync(logFile, 'utf8');
-            const lines = content.split('\n').filter(l => l.trim());
-            const recent = lines.slice(-30);
-            recent.forEach(line => console.log(formatLine(line, type)));
-            console.log(`\n${colors.dim}--- Đang theo dõi real-time ---${colors.reset}\n`);
+            if (lastSize > 0) {
+                const content = fs.readFileSync(logFile, 'utf8');
+                const lines = content.split('\n').filter(l => l.trim());
+                const recent = lines.slice(-30);
+                recent.forEach(line => console.log(formatLine(line, type)));
+                console.log(`\n${colors.dim}--- Đang theo dõi real-time ---${colors.reset}\n`);
+            }
+        } catch (e) {
+            lastSize = 0;
         }
-    } catch (e) {
-        lastSize = 0;
-    }
+    };
 
-    // Polling loop
-    const poll = () => {
+    showInitial();
+
+    const readNewContent = () => {
         try {
             if (!fs.existsSync(logFile)) return;
-
             const stats = fs.statSync(logFile);
 
             if (stats.size < lastSize) {
-                lastSize = 0; // File was reset/overwritten (rotation)
+                lastSize = 0;
             }
 
             if (stats.size > lastSize) {
@@ -143,22 +197,36 @@ function watchLog(logFile, type) {
 
                 lastSize = stats.size;
             }
-        } catch (e) {
-            // Ignore
-        }
+        } catch (e) {}
     };
 
-    const intervalId = setInterval(poll, POLL_INTERVAL);
+    // Use fs.watch if available, fallback to polling
+    let watcher;
+    try {
+        watcher = fs.watch(logFile, (event) => {
+            if (event === 'change') {
+                readNewContent();
+            }
+        });
+        console.log(`${colors.green}✓ Watcher (fs.watch) [${agentFilter}] đang chạy${colors.reset}\n`);
+    } catch (e) {
+        const intervalId = setInterval(readNewContent, POLL_INTERVAL);
+        watcher = { close: () => clearInterval(intervalId) };
+        console.log(`${colors.green}✓ Watcher (polling) [${agentFilter}] đang chạy${colors.reset}\n`);
+    }
 
     process.on('SIGINT', () => {
-        clearInterval(intervalId);
+        watcher.close();
         console.log(`\n${colors.yellow}👋 Đã dừng watcher. Tạm biệt!${colors.reset}`);
         process.exit(0);
     });
-
-    console.log(`${colors.green}✓ Watcher [${agentFilter} - ${type}] đang chạy${colors.reset}\n`);
 }
 
 // Run
-const logFile = getLogFile(agentFilter, logType);
-watchLog(logFile, logType);
+try {
+    const logFile = getLogFile(runId, agentFilter, logType);
+    watchLog(logFile, logType);
+} catch (e) {
+    console.error(`\x1b[31mError: ${e.message}\x1b[0m`);
+    process.exit(1);
+}

@@ -1,6 +1,6 @@
 /**
  * Run Agent Script - Autonomous Persistent PTY Bridge
- * Version: 3.0 (Shell-based with Auto-Response)
+ * Version: 3.1 (Shell-based with Auto-Response & Security Hardening)
  */
 
 const fs = require('fs');
@@ -14,19 +14,55 @@ try {
     process.exit(1);
 }
 
-const LOG_DIR = path.join(__dirname, '..');
 const args = process.argv.slice(2);
 
 // Parse arguments
 const cwdIndex = args.indexOf('--cwd');
 const cwd = cwdIndex !== -1 ? args[cwdIndex + 1] : process.cwd();
 
+const debugInput = args.indexOf('--debug-input') !== -1;
+
 const idIndex = args.indexOf('--id');
-const rawAgentId = idIndex !== -1 ? args[idIndex + 1] : null;
-const agentId = rawAgentId ? rawAgentId.replace(/[^a-zA-Z0-9_-]/g, '') : null; // Sanitize ID to prevent path traversal
+let agentId = idIndex !== -1 ? args[idIndex + 1] : null;
+
+// Validate and normalize agentId
+if (!agentId) {
+    console.error('[SYSTEM] Error: --id is required.');
+    process.exit(1);
+}
+
+// Strict sanitization for agentId
+agentId = agentId.toLowerCase();
+if (!/^[a-z0-9_-]{1,32}$/.test(agentId) || agentId.includes('..') || agentId.includes('/') || agentId.includes('\\')) {
+    console.error('[SYSTEM] Error: Invalid --id format. Must be ^[a-z0-9_-]{1,32}$ and no path traversal.');
+    process.exit(1);
+}
 
 const autoYesIndex = args.indexOf('--auto-yes');
 const autoYes = autoYesIndex !== -1;
+
+// Define and sanitize runId
+let runId = process.env.RUN_ID || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+// Sanitize runId to prevent path traversal
+runId = runId.replace(/[\\/]/g, '_');
+if (runId.includes('..')) {
+    console.error('[SYSTEM] Error: Invalid RUN_ID.');
+    process.exit(1);
+}
+
+const LOG_DIR = path.join(process.cwd(), '.agent', 'logs', runId, agentId);
+
+// Ensure LOG_DIR is within the expected path
+const resolvedLogDir = path.resolve(LOG_DIR);
+const expectedBaseDir = path.resolve(path.join(process.cwd(), '.agent', 'logs'));
+if (!resolvedLogDir.startsWith(expectedBaseDir)) {
+    console.error('[SYSTEM] Error: Path traversal detected in log directory.');
+    process.exit(1);
+}
+
+if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+}
 
 // Simple whitelist/blacklist for auto-yes functionality
 const autoYesWhitelist = [
@@ -41,34 +77,29 @@ const autoYesBlacklist = [
 ];
 
 // Enhanced logging with separate channels and timestamp
-const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
-
 function getTimestamp() {
     return new Date().toISOString();
 }
 
-function rotateLogFile(filePath) {
-    const backupPath = filePath + '.1';
-    if (fs.existsSync(filePath)) {
-        if (fs.existsSync(backupPath)) {
-            fs.unlinkSync(backupPath); // Remove old backup
-        }
-        fs.renameSync(filePath, backupPath); // Rename current to backup
-    }
-}
+// Define log files for different channels
+const logFiles = {
+    rawSpecific: path.join(LOG_DIR, 'raw.log'),
+    eventSpecific: path.join(LOG_DIR, 'events.log'),
+    specific: path.join(LOG_DIR, 'output.log') // Keep for backward compatibility
+};
 
-function checkAndRotateLog(filePath) {
-    if (fs.existsSync(filePath)) {
-        const stats = fs.statSync(filePath);
-        if (stats.size > MAX_LOG_SIZE) {
-            rotateLogFile(filePath);
-        }
+const logStreams = {};
+
+function getLogStream(filePath) {
+    if (!logStreams[filePath]) {
+        logStreams[filePath] = fs.createWriteStream(filePath, { flags: 'a' });
     }
+    return logStreams[filePath];
 }
 
 function writeLog(filePath, message) {
-    checkAndRotateLog(filePath);
-    fs.appendFileSync(filePath, message);
+    const stream = getLogStream(filePath);
+    stream.write(message);
 }
 
 function logRaw(message, noNewline = false) {
@@ -76,7 +107,6 @@ function logRaw(message, noNewline = false) {
     const line = noNewline ? message : `[${timestamp}] ${message}\n`;
     try {
         writeLog(logFiles.rawSpecific, line);
-        writeLog(logFiles.rawCombined, line);
     } catch (e) { }
     process.stdout.write(line);
 }
@@ -86,23 +116,12 @@ function logEvent(eventType, message) {
     const eventMessage = `[${timestamp}] EVENT: ${eventType} - ${message}\n`;
     try {
         writeLog(logFiles.eventSpecific, eventMessage);
-        writeLog(logFiles.eventCombined, eventMessage);
     } catch (e) { }
     process.stdout.write(eventMessage);
 }
 
-// Define log files for different channels
-const logFiles = {
-    rawSpecific: path.join(LOG_DIR, agentId ? `${agentId}_raw.log` : 'agent_raw.log'),
-    rawCombined: path.join(LOG_DIR, 'combined_raw.log'),
-    eventSpecific: path.join(LOG_DIR, agentId ? `${agentId}_events.log` : 'agent_events.log'),
-    eventCombined: path.join(LOG_DIR, 'combined_events.log'),
-    specific: path.join(LOG_DIR, agentId ? `${agentId}_output.log` : 'agent_output.log'), // Keep for backward compatibility
-    combined: path.join(LOG_DIR, 'combined_output.log') // Keep for backward compatibility
-};
-
 function stripAnsi(str) {
-    return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, '');
+    return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]* [ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, '');
 }
 
 function log(message, noNewline = false) {
@@ -125,9 +144,11 @@ function log(message, noNewline = false) {
 const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'cmd.exe') : (process.env.SHELL || '/bin/bash');
 
 async function runAgent() {
-    try { fs.writeFileSync(logFiles.specific, ''); } catch (e) { }
-    try { fs.writeFileSync(logFiles.rawSpecific, ''); } catch (e) { }
-    try { fs.writeFileSync(logFiles.eventSpecific, ''); } catch (e) { }
+    // Initialize log files (async)
+    const initLogs = [logFiles.specific, logFiles.rawSpecific, logFiles.eventSpecific].map(file =>
+        fs.promises.writeFile(file, '').catch(() => {})
+    );
+    await Promise.all(initLogs);
 
     log(`\n====================================================================\n`);
     log(`[AUTONOMOUS PTY BRIDGE] STARTING SHELL: ${shell}\n`);
@@ -152,19 +173,43 @@ async function runAgent() {
         }
     };
 
+    // Serialize all writes (stdin and auto-yes) via a shared promise queue
+    let writeQueue = Promise.resolve();
+    
+    const redactSecrets = (str) => {
+        if (typeof str !== 'string') return str;
+        return str.replace(/(password|secret|key|token|auth|api[_-]?key)["']?\s*[:=]\s*["']?([^"'\\s,]+)["']?/gi, (match, p1, p2) => {
+            return match.replace(p2, '********');
+        });
+    };
+
+    const enqueueWrite = (data, isAuto = false) => {
+        writeQueue = writeQueue.then(async () => {
+            const str = data.toString();
+            const normalized = str.replace(/\n/g, '\r');
+            
+            if (debugInput) {
+                const label = isAuto ? '[AUTO REPLY]' : '[BRIDGE ACTION]';
+                log(`${label} Sending: ${JSON.stringify(redactSecrets(normalized))}`);
+            }
+
+            if (!isAuto) {
+                // Auto-Escape reset if it looks like a new command starting with a character
+                if (normalized.length > 1 && /^[a-zA-Z/]/.test(normalized)) {
+                    ptyProcess.write('\x1b');
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+
+            await writeThrottled(normalized);
+        }).catch(err => {
+            log(`[SYSTEM] Error in write queue: ${err.message}`);
+        });
+    };
+
     // Bridge stdin (from Antigravity/User)
-    process.stdin.on('data', async (data) => {
-        const str = data.toString();
-        const normalized = str.replace(/\n/g, '\r');
-        log(`[BRIDGE ACTION] Incoming: ${JSON.stringify(normalized)}`);
-
-        // Auto-Escape reset if it looks like a new command starting with a character
-        if (normalized.length > 1 && /^[a-zA-Z/]/.test(normalized)) {
-            ptyProcess.write('\x1b');
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-
-        await writeThrottled(normalized);
+    process.stdin.on('data', (data) => {
+        enqueueWrite(data, false);
     });
 
     ptyProcess.onData(async (data) => {
@@ -190,10 +235,10 @@ async function runAgent() {
                 for (const whitelistPattern of autoYesWhitelist) {
                     if (whitelistPattern.test(buffer)) {
                         if (buffer.includes('> 1. Yes') || buffer.includes('1. Yes')) {
-                            log(`[AUTO REPLY] Detected Yes/No prompt. Sending "1\\r"`);
+                            log(`[AUTO REPLY] Detected Yes/No prompt. Enqueueing "1\r"`);
                             logEvent('ACTION', 'auto-reply-sent');
                             buffer = ''; // Clear buffer
-                            await writeThrottled('1\r');
+                            enqueueWrite('1\r', true);
                             break; // Exit whitelist loop after responding
                         }
                     }
