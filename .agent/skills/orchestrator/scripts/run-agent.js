@@ -22,7 +22,8 @@ const cwdIndex = args.indexOf('--cwd');
 const cwd = cwdIndex !== -1 ? args[cwdIndex + 1] : process.cwd();
 
 const idIndex = args.indexOf('--id');
-const agentId = idIndex !== -1 ? args[idIndex + 1] : null;
+const rawAgentId = idIndex !== -1 ? args[idIndex + 1] : null;
+const agentId = rawAgentId ? rawAgentId.replace(/[^a-zA-Z0-9_-]/g, '') : null; // Sanitize ID to prevent path traversal
 
 const autoYesIndex = args.indexOf('--auto-yes');
 const autoYes = autoYesIndex !== -1;
