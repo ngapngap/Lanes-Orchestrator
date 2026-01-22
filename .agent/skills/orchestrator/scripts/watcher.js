@@ -20,7 +20,7 @@ const agentFilter = process.argv[2] || 'all';
 // Get log file based on agent
 function getLogFile(agent) {
     if (agent === 'all') {
-        return path.join(LOG_DIR, 'agent_output.log');
+        return path.join(LOG_DIR, 'combined_output.log');
     }
     return path.join(LOG_DIR, `${agent}_output.log`);
 }
