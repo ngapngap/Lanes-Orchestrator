@@ -18,17 +18,17 @@ node .agent/skills/orchestrator/scripts/run-agent.js --id <lane_id> --cwd <worki
 
 ## Giám sát Log
 
-Sử dụng `watcher.js` để xem log của agent:
+Sử dụng `watcher.js` để xem log của agent (ưu tiên cờ `--run-id` và `--lane`):
 
 ```bash
-node .agent/skills/orchestrator/scripts/watcher.js [run_id] [lane_id] [log_type] [--no-clear]
+node .agent/skills/orchestrator/scripts/watcher.js --run-id <run_id> --lane <lane_id> [--type <log_type>] [--no-clear]
 ```
 
 ### Ví dụ:
 - Xem lane mặc định (`ui_lane`) của lần chạy mới nhất: `node .agent/skills/orchestrator/scripts/watcher.js`
-- Xem UI Lane: `node .agent/skills/orchestrator/scripts/watcher.js ui_lane`
-- Xem events log: `node .agent/skills/orchestrator/scripts/watcher.js ui_lane events`
-- Không xóa màn hình: `node .agent/skills/orchestrator/scripts/watcher.js --no-clear`
+- Chỉ định run và lane: `node .agent/skills/orchestrator/scripts/watcher.js --run-id 20240101_120000 --lane ui_lane`
+- Xem events log: `node .agent/skills/orchestrator/scripts/watcher.js --run-id 20240101_120000 --lane ui_lane --type events`
+- Không xóa màn hình: `node .agent/skills/orchestrator/scripts/watcher.js --run-id 20240101_120000 --lane ui_lane --no-clear`
 
 ## Cấu trúc Log
 Logs được lưu tại: `.agent/logs/<run_id>/<lane_id>/`

@@ -4,9 +4,7 @@ node_modules/
 
 # Logs
 *.log
-combined_output.log
-agent_output.log
-*_output.log
+.agent/logs/
 
 # Environment
 .env
