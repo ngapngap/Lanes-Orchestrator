@@ -24,9 +24,80 @@ const cwd = cwdIndex !== -1 ? args[cwdIndex + 1] : process.cwd();
 const idIndex = args.indexOf('--id');
 const agentId = idIndex !== -1 ? args[idIndex + 1] : null;
 
+const autoYesIndex = args.indexOf('--auto-yes');
+const autoYes = autoYesIndex !== -1;
+
+// Simple whitelist/blacklist for auto-yes functionality
+const autoYesWhitelist = [
+    /do you want to.*(?:create|proceed|allow|fetch|make|edit|run|execute)/i,
+    /\?.*❯/i,
+    /(?:choose option|enter index|enter text).*[:?]/i
+];
+const autoYesBlacklist = [
+    /password/i,
+    /confirm deletion/i,
+    /are you sure you want to delete/i
+];
+
+// Enhanced logging with separate channels and timestamp
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
+
+function getTimestamp() {
+    return new Date().toISOString();
+}
+
+function rotateLogFile(filePath) {
+    const backupPath = filePath + '.1';
+    if (fs.existsSync(filePath)) {
+        if (fs.existsSync(backupPath)) {
+            fs.unlinkSync(backupPath); // Remove old backup
+        }
+        fs.renameSync(filePath, backupPath); // Rename current to backup
+    }
+}
+
+function checkAndRotateLog(filePath) {
+    if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        if (stats.size > MAX_LOG_SIZE) {
+            rotateLogFile(filePath);
+        }
+    }
+}
+
+function writeLog(filePath, message) {
+    checkAndRotateLog(filePath);
+    fs.appendFileSync(filePath, message);
+}
+
+function logRaw(message, noNewline = false) {
+    const timestamp = getTimestamp();
+    const line = noNewline ? message : `[${timestamp}] ${message}\n`;
+    try {
+        writeLog(logFiles.rawSpecific, line);
+        writeLog(logFiles.rawCombined, line);
+    } catch (e) { }
+    process.stdout.write(line);
+}
+
+function logEvent(eventType, message) {
+    const timestamp = getTimestamp();
+    const eventMessage = `[${timestamp}] EVENT: ${eventType} - ${message}\n`;
+    try {
+        writeLog(logFiles.eventSpecific, eventMessage);
+        writeLog(logFiles.eventCombined, eventMessage);
+    } catch (e) { }
+    process.stdout.write(eventMessage);
+}
+
+// Define log files for different channels
 const logFiles = {
-    specific: path.join(LOG_DIR, agentId ? `${agentId}_output.log` : 'agent_output.log'),
-    combined: path.join(LOG_DIR, 'combined_output.log')
+    rawSpecific: path.join(LOG_DIR, agentId ? `${agentId}_raw.log` : 'agent_raw.log'),
+    rawCombined: path.join(LOG_DIR, 'combined_raw.log'),
+    eventSpecific: path.join(LOG_DIR, agentId ? `${agentId}_events.log` : 'agent_events.log'),
+    eventCombined: path.join(LOG_DIR, 'combined_events.log'),
+    specific: path.join(LOG_DIR, agentId ? `${agentId}_output.log` : 'agent_output.log'), // Keep for backward compatibility
+    combined: path.join(LOG_DIR, 'combined_output.log') // Keep for backward compatibility
 };
 
 function stripAnsi(str) {
@@ -34,12 +105,19 @@ function stripAnsi(str) {
 }
 
 function log(message, noNewline = false) {
-    const line = noNewline ? message : `${message}\n`;
-    try {
-        fs.appendFileSync(logFiles.specific, line);
-        fs.appendFileSync(logFiles.combined, line);
-    } catch (e) { }
-    process.stdout.write(line);
+    // Log both raw and event depending on message type
+    if (message.includes('STATUS:') || message.includes('[SYSTEM]') || message.includes('[AUTO REPLY]') || message.includes('[BRIDGE ACTION]')) {
+        // Extract status for event logging
+        if (message.includes('STATUS:')) {
+            const statusMatch = message.match(/STATUS:\s*(\w+)/);
+            if (statusMatch) {
+                logEvent('STATUS', statusMatch[1]);
+            }
+        }
+        logRaw(message, noNewline);
+    } else {
+        logRaw(message, noNewline);
+    }
 }
 
 // Shell selection
@@ -47,10 +125,13 @@ const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'cmd.exe') 
 
 async function runAgent() {
     try { fs.writeFileSync(logFiles.specific, ''); } catch (e) { }
+    try { fs.writeFileSync(logFiles.rawSpecific, ''); } catch (e) { }
+    try { fs.writeFileSync(logFiles.eventSpecific, ''); } catch (e) { }
 
     log(`\n====================================================================\n`);
     log(`[AUTONOMOUS PTY BRIDGE] STARTING SHELL: ${shell}\n`);
     log(`CWD: ${cwd}\n`);
+    logEvent('STATUS', 'running');
     log(`====================================================================\n`);
 
     const ptyProcess = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], {
@@ -92,17 +173,30 @@ async function runAgent() {
 
         // --- Autonomous Response Logic ---
 
-        // 1. Detect Claude Code's Yes/No prompt (flexible with spaces and ANSI)
-        const lowerBuf = buffer.toLowerCase();
-        if (
-            /do you want to.*(?:create|proceed|allow|fetch|make|edit|run|execute)/i.test(lowerBuf) ||
-            /\?.*❯/i.test(lowerBuf) ||
-            /(?:choose option|enter index|enter text).*[:?]/i.test(lowerBuf)
-        ) {
-            if (buffer.includes('> 1. Yes') || buffer.includes('1. Yes')) {
-                log(`[AUTO REPLY] Detected Yes/No prompt. Sending "1\\r"`);
-                buffer = ''; // Clear buffer
-                await writeThrottled('1\r');
+        // 1. Auto-yes functionality - only enabled with --auto-yes flag
+        if (autoYes) {
+            // Check against blacklist first (higher priority)
+            let blacklisted = false;
+            for (const blacklistPattern of autoYesBlacklist) {
+                if (blacklistPattern.test(buffer)) {
+                    blacklisted = true;
+                    break;
+                }
+            }
+            
+            if (!blacklisted) {
+                // Check against whitelist
+                for (const whitelistPattern of autoYesWhitelist) {
+                    if (whitelistPattern.test(buffer)) {
+                        if (buffer.includes('> 1. Yes') || buffer.includes('1. Yes')) {
+                            log(`[AUTO REPLY] Detected Yes/No prompt. Sending "1\\r"`);
+                            logEvent('ACTION', 'auto-reply-sent');
+                            buffer = ''; // Clear buffer
+                            await writeThrottled('1\r');
+                            break; // Exit whitelist loop after responding
+                        }
+                    }
+                }
             }
         }
 
@@ -118,9 +212,15 @@ async function runAgent() {
     });
 
     ptyProcess.onExit(({ exitCode }) => {
+        logEvent('STATUS', 'exited');
         log(`\n[SYSTEM] Shell Exited (code: ${exitCode})\n`);
         process.exit(exitCode);
     });
+
+    // Heartbeat - Periodic status update for monitoring
+    setInterval(() => {
+        logEvent('HEARTBEAT', 'active');
+    }, 60000); // Every 1 minute
 }
 
 runAgent();

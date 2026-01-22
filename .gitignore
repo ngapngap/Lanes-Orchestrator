@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.agent/skills/orchestrator/node_modules/
+
+# Logs
+*.log
+combined_output.log
+agent_output.log
+*_output.log
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
