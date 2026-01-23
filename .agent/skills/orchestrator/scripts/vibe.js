@@ -39,7 +39,8 @@ try {
                 'debate': '30_debate',
                 'spec': '40_spec',
                 'implementation': '50_implementation',
-                'verification': '60_verification'
+                'verification': '60_verification',
+                'deploy': 'deploy'
             };
             return path.join(REPO_ROOT, 'artifacts', 'runs', runId, phases[phase] || phase);
         },
@@ -71,13 +72,27 @@ const c = {
 // Parse args
 const parseArgs = () => {
     const args = process.argv.slice(2);
-    const options = { description: null };
+    const options = {
+        description: null,
+        nonInteractive: false,
+        answersJson: null,
+        answersFile: null,
+        answersStdin: false
+    };
 
     // Join all non-flag args as description
     const descParts = [];
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--run-id' && args[i + 1]) {
             options.runId = args[++i];
+        } else if (args[i] === '--non-interactive') {
+            options.nonInteractive = true;
+        } else if (args[i] === '--answers-json' && args[i + 1]) {
+            options.answersJson = args[++i];
+        } else if (args[i] === '--answers-file' && args[i + 1]) {
+            options.answersFile = args[++i];
+        } else if (args[i] === '--answers-stdin') {
+            options.answersStdin = true;
         } else if (!args[i].startsWith('--')) {
             descParts.push(args[i]);
         }
@@ -85,6 +100,12 @@ const parseArgs = () => {
     if (descParts.length > 0) {
         options.description = descParts.join(' ');
     }
+
+    // Auto-detect non-interactive if stdin is not TTY
+    if (!process.stdin.isTTY) {
+        options.nonInteractive = true;
+    }
+
     return options;
 };
 
@@ -138,7 +159,60 @@ const VIBE_QUESTIONS = [
     }
 ];
 
-// Collect answers
+// Read stdin as string (for --answers-stdin)
+const readStdin = () => new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data.trim()));
+    // Timeout after 100ms if no data
+    setTimeout(() => resolve(data.trim()), 100);
+});
+
+// Get answers from non-interactive sources
+const getAnswersNonInteractive = async (options) => {
+    let rawAnswers = {};
+
+    // Priority: --answers-json > --answers-file > --answers-stdin > defaults
+    if (options.answersJson) {
+        try {
+            rawAnswers = JSON.parse(options.answersJson);
+        } catch (e) {
+            console.error(`${c.yellow}⚠${c.reset} Invalid --answers-json, using defaults`);
+        }
+    } else if (options.answersFile) {
+        try {
+            const content = fs.readFileSync(options.answersFile, 'utf8');
+            rawAnswers = JSON.parse(content);
+        } catch (e) {
+            console.error(`${c.yellow}⚠${c.reset} Cannot read --answers-file, using defaults`);
+        }
+    } else if (options.answersStdin) {
+        try {
+            const stdinData = await readStdin();
+            if (stdinData) {
+                rawAnswers = JSON.parse(stdinData);
+            }
+        } catch (e) {
+            console.error(`${c.yellow}⚠${c.reset} Invalid JSON from stdin, using defaults`);
+        }
+    }
+
+    // Merge with defaults from VIBE_QUESTIONS
+    const answers = { initial: options.description || '' };
+    for (const q of VIBE_QUESTIONS) {
+        answers[q.id] = rawAnswers[q.id] || q.default || '';
+    }
+
+    // Use description as goal if goal is empty
+    if (!answers.goal && options.description) {
+        answers.goal = options.description;
+    }
+
+    return answers;
+};
+
+// Collect answers (interactive TTY mode)
 const collectAnswers = async (initialDescription) => {
     const rl = createRL();
     const answers = {};
@@ -259,12 +333,7 @@ const generateSpec = (intake, researchNote) => {
         intake.constraints?.auth
     );
 
-    const template = fs.readFileSync(
-        path.join(__dirname, 'templates/spec.template.md'),
-        'utf8'
-    );
-
-    // Simple template replacement (not full handlebars)
+    // Build spec inline (no template needed)
     let spec = `# ${intake.project.name} - Specification
 
 > Tài liệu này mô tả chi tiết dự án để developer hoặc AI agent có thể implement.
@@ -884,8 +953,24 @@ const runVibe = async () => {
     console.log(`${c.magenta}${c.bold}╚══════════════════════════════════════════════════════════════╝${c.reset}`);
     console.log(`\n${c.dim}Mô tả dự án → Nhận spec + tasks + security + deploy kit${c.reset}\n`);
 
-    // Step 1: Collect answers
-    const answers = await collectAnswers(options.description);
+    // Step 1: Collect answers (interactive or non-interactive)
+    let answers;
+    if (options.nonInteractive) {
+        console.log(`${c.dim}[Non-interactive mode]${c.reset}\n`);
+        answers = await getAnswersNonInteractive(options);
+    } else {
+        answers = await collectAnswers(options.description);
+    }
+
+    // Validate required fields
+    if (!answers.goal && !answers.features) {
+        console.error(`${c.yellow}⚠${c.reset} Missing required fields (goal, features).`);
+        console.error(`  In non-interactive mode, provide answers via:`);
+        console.error(`    --answers-json '{"goal":"...","features":"..."}'`);
+        console.error(`    --answers-file answers.json`);
+        console.error(`    --answers-stdin (pipe JSON to stdin)`);
+        process.exit(1);
+    }
 
     // Step 2: Generate run ID
     const slug = generateSlug(answers);
@@ -895,6 +980,16 @@ const runVibe = async () => {
         const t = now.toTimeString().slice(0, 5).replace(':', '');
         return `${d}_${t}_${slug}`;
     })();
+
+    // Step 2b: Create run directory immediately
+    const runDir = path.join(REPO_ROOT, 'artifacts', 'runs', runId);
+    if (!fs.existsSync(runDir)) {
+        fs.mkdirSync(runDir, { recursive: true });
+    }
+
+    // Save initial user request
+    const userRequestContent = `# User Request\n\n**Description:** ${options.description || '(interactive)'}\n\n**Answers:**\n${JSON.stringify(answers, null, 2)}\n`;
+    fs.writeFileSync(path.join(runDir, '00_user_request.md'), userRequestContent);
 
     console.log(`\n${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
     console.log(`${c.cyan}   Đang xử lý... Run ID: ${runId}${c.reset}`);
@@ -945,8 +1040,8 @@ const runVibe = async () => {
     console.log(`${c.yellow}[6/7]${c.reset} Tạo deploy kit...`);
     const deployKit = generateDeployKit(intake);
 
-    // Create deploy directory
-    const deployDir = path.join(REPO_ROOT, 'artifacts', 'runs', runId, 'deploy');
+    // Create deploy directory using utils
+    const deployDir = utils.getArtifactPath(runId, 'deploy');
     if (!fs.existsSync(deployDir)) {
         fs.mkdirSync(deployDir, { recursive: true });
     }

@@ -54,7 +54,8 @@ const getArtifactPath = (runId, phase) => {
     'spec': '40_spec',
     'design': '45_design',
     'implementation': '50_implementation',
-    'verification': '60_verification'
+    'verification': '60_verification',
+    'deploy': 'deploy'
   };
 
   const phasePath = phases[phase];
