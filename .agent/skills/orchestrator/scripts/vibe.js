@@ -135,8 +135,8 @@ const parseArgs = () => {
         options.description = descParts.join(' ');
     }
 
-    // Auto-detect non-interactive if stdin is not TTY
-    if (!process.stdin.isTTY) {
+    // Auto-detect non-interactive (DoD vNext 3.1)
+    if (!process.stdin.isTTY || options.description || options.answersJson || options.answersFile || options.answersStdin) {
         options.nonInteractive = true;
     }
 
@@ -481,10 +481,14 @@ const BASE_QUESTIONS = {
  * Get questions for a specific project type
  */
 const getQuestionsForType = (projectType) => {
-    const questionIds = projectType.questions || ['goal', 'features', 'platform', 'auth', 'data_sensitivity', 'deploy'];
+    // Handle both raw type info and classification result
+    const typeInfo = projectType?.type || projectType || PROJECT_TYPES.web;
+    const defaults = typeInfo.defaults || {};
+    const questionIds = typeInfo.questions || ['goal', 'features', 'platform', 'auth', 'data_sensitivity', 'deploy'];
+
     return questionIds.map(id => ({
         ...BASE_QUESTIONS[id],
-        default: projectType.defaults[id] || BASE_QUESTIONS[id].default
+        default: defaults[id] || BASE_QUESTIONS[id]?.default || ''
     }));
 };
 
@@ -531,12 +535,13 @@ const getAnswersNonInteractive = async (options) => {
     }
 
     // Detect project type from description
-    const description = options.description || rawAnswers.goal || '';
-    const projectType = detectProjectType(description);
+    const description = options?.description || rawAnswers?.goal || '';
+    const projectTypeResult = detectProjectType(description);
+    const typeInfo = projectTypeResult.type;
     const detectedLanguage = detectLanguage(description);
     const negations = detectExplicitNegations(description);
 
-    console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${projectType.name}`);
+    console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${typeInfo?.name || 'unknown'}`);
     if (detectedLanguage) {
         console.log(`${c.cyan}[DETECT]${c.reset} Language: ${detectedLanguage}`);
     }
@@ -545,12 +550,12 @@ const getAnswersNonInteractive = async (options) => {
     }
 
     // Get questions for this project type
-    const questions = getQuestionsForType(projectType);
+    const questions = getQuestionsForType(projectTypeResult);
 
     // Build answers with smart defaults
     const answers = {
         initial: description,
-        _projectType: projectType.id,
+        _projectType: typeInfo?.id || 'web',
         _detectedLanguage: detectedLanguage
     };
 
@@ -608,7 +613,8 @@ const collectAnswers = async (initialDescription) => {
     const answers = {};
 
     // Detect project type first
-    const projectType = detectProjectType(initialDescription);
+    const projectTypeResult = detectProjectType(initialDescription);
+    const typeInfo = projectTypeResult.type;
     const detectedLanguage = detectLanguage(initialDescription);
     const negations = detectExplicitNegations(initialDescription);
 
@@ -618,7 +624,7 @@ const collectAnswers = async (initialDescription) => {
 
     if (initialDescription) {
         console.log(`${c.dim}Mô tả ban đầu: ${initialDescription}${c.reset}`);
-        console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${projectType.name}`);
+        console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${typeInfo?.name || 'unknown'}`);
         if (detectedLanguage) {
             console.log(`${c.cyan}[DETECT]${c.reset} Language: ${detectedLanguage}`);
         }
@@ -626,11 +632,11 @@ const collectAnswers = async (initialDescription) => {
         answers.initial = initialDescription;
     }
 
-    answers._projectType = projectType.id;
+    answers._projectType = typeInfo?.id || 'web';
     answers._detectedLanguage = detectedLanguage;
 
     // Get questions for this project type
-    const questions = getQuestionsForType(projectType);
+    const questions = getQuestionsForType(projectTypeResult);
 
     console.log(`${c.dim}Trả lời ${questions.length} câu hỏi sau (Enter để dùng mặc định):${c.reset}\n`);
 
