@@ -98,6 +98,7 @@ const buildCommandRegistry = (skills) => {
   // Built-in commands
   registry.commands['help'] = { type: 'builtin', handler: 'help' };
   registry.commands['init'] = { type: 'builtin', handler: 'init' };
+  registry.commands['install'] = { type: 'builtin', handler: 'install' };
   registry.commands['list'] = { type: 'builtin', handler: 'list' };
   registry.commands['status'] = { type: 'builtin', handler: 'status' };
   registry.commands['skills'] = { type: 'builtin', handler: 'skills' };
@@ -216,6 +217,7 @@ ${c.cyan}QUALITY COMMANDS${c.reset}
   ${c.green}qa${c.reset}                    Run QA gate
 
 ${c.cyan}MANAGEMENT${c.reset}
+  ${c.green}install${c.reset}               Scaffold toolkit into current project
   ${c.green}list${c.reset}                  List all runs
   ${c.green}status${c.reset} [run_id]       Show run status
   ${c.green}selfcheck${c.reset}             Validate environment
@@ -226,8 +228,9 @@ ${c.cyan}OPTIONS${c.reset}
   --help, -h            Show help
 
 ${c.cyan}EXAMPLES${c.reset}
+  npx aat install                    # Scaffold into current project
   npx aat init my-project
-  npx aat research "nodejs auth starter"
+  npx aat research --query "nodejs auth starter"
   npx aat code-review:review --path src/
   npx aat qa --run-id 20260123_1430_myproject
 
@@ -259,6 +262,105 @@ ${c.dim}See 'npx aat skills' for all available skill commands${c.reset}
     }
 
     return 0;
+  },
+
+  install: (args) => {
+    log.header('Installing AI Agent Toolkit');
+
+    const targetDir = args.options.path || process.cwd();
+    const sourceDir = REPO_ROOT;
+
+    // Check if we're in the source repo
+    if (targetDir === sourceDir) {
+      log.warn('You are in the toolkit repo itself.');
+      log.info('To use in another project: cd /your/project && npx ai-agent-toolkit install');
+      return 1;
+    }
+
+    console.log(`Source: ${sourceDir}`);
+    console.log(`Target: ${targetDir}\n`);
+
+    const foldersToSync = [
+      { src: 'agents', dst: 'agents' },
+      { src: '.agent', dst: '.agent' },
+      { src: 'schemas', dst: 'schemas' },
+      { src: 'examples', dst: 'examples' },
+      { src: 'docs', dst: 'docs' }
+    ];
+
+    const filesToCopy = [
+      'AGENTS.md',
+      'RULES.md',
+      'qa.md',
+      'LICENSE_POLICY.md',
+      '.env.example'
+    ];
+
+    // Copy folders recursively
+    const copyRecursive = (src, dst) => {
+      if (!fs.existsSync(src)) return;
+
+      if (!fs.existsSync(dst)) {
+        fs.mkdirSync(dst, { recursive: true });
+      }
+
+      const entries = fs.readdirSync(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const dstPath = path.join(dst, entry.name);
+
+        if (entry.isDirectory()) {
+          copyRecursive(srcPath, dstPath);
+        } else {
+          fs.copyFileSync(srcPath, dstPath);
+        }
+      }
+    };
+
+    try {
+      // Copy folders
+      for (const folder of foldersToSync) {
+        const srcPath = path.join(sourceDir, folder.src);
+        const dstPath = path.join(targetDir, folder.dst);
+
+        if (fs.existsSync(srcPath)) {
+          copyRecursive(srcPath, dstPath);
+          log.success(`${folder.dst}/`);
+        } else {
+          log.warn(`Source not found: ${folder.src}`);
+        }
+      }
+
+      // Copy files
+      for (const file of filesToCopy) {
+        const srcPath = path.join(sourceDir, file);
+        const dstPath = path.join(targetDir, file);
+
+        if (fs.existsSync(srcPath)) {
+          fs.copyFileSync(srcPath, dstPath);
+          log.success(file);
+        }
+      }
+
+      // Create artifacts/runs directory
+      const artifactsDir = path.join(targetDir, 'artifacts', 'runs');
+      if (!fs.existsSync(artifactsDir)) {
+        fs.mkdirSync(artifactsDir, { recursive: true });
+        log.success('artifacts/runs/');
+      }
+
+      console.log(`\n${c.green}Installation complete!${c.reset}\n`);
+      console.log('Next steps:');
+      console.log(`  1. ${c.cyan}cp .env.example .env${c.reset}`);
+      console.log(`  2. Edit .env with your API keys`);
+      console.log(`  3. ${c.cyan}npx ai-agent-toolkit selfcheck${c.reset}`);
+      console.log(`  4. ${c.cyan}npx ai-agent-toolkit init my-project${c.reset}`);
+
+      return 0;
+    } catch (e) {
+      log.error(`Installation failed: ${e.message}`);
+      return 1;
+    }
   },
 
   init: (args) => {
