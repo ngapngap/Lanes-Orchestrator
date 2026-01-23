@@ -195,6 +195,44 @@ QA/Build/Deploy Fail
 
 ## Implementation Notes
 
+### AutoFix State Tracking
+
+State được lưu tại: `artifacts/runs/<run_id>/60_verification/autofix_state.json`
+
+```json
+{
+  "spec_version": 1,
+  "attempt_in_spec": 0,
+  "last_failure_fingerprint": "a1b2c3",
+  "history": [
+    {
+      "attempt": 1,
+      "spec_version": 1,
+      "fingerprint": "a1b2c3",
+      "timestamp": "2024-01-23T12:00:00Z",
+      "issues": [{"check": "tests", "category": "implementation_bug"}]
+    }
+  ]
+}
+```
+
+### Attempt Counting Rules
+
+**Case 1: Same error pattern repeats**
+```
+Attempt 1 → Fix → Fail (same fingerprint) → Attempt 2 → Fail → STOP
+```
+
+**Case 2: New error pattern appears**
+```
+Attempt 1 → Fix → Fail (new fingerprint) → Counter resets → Attempt 1 (new)
+```
+
+**Case 3: User approves spec change**
+```
+Attempt 2 → STOP → User approves CR → spec_version++ → Counter resets to 0
+```
+
 ### Trong QA Gate script:
 
 ```javascript
@@ -225,11 +263,21 @@ const triageFailure = (error, spec) => {
 };
 ```
 
-### AutoFix max retries:
+### AutoFix configuration:
 
 ```javascript
-const AUTOFIX_MAX_RETRIES = 2;
+const AUTOFIX_MAX_ATTEMPTS_PER_SPEC = 2;
+
+// When max attempts reached, generate fix_summary.md
+// and stop autofix until:
+// 1. User approves spec change (spec_version++)
+// 2. User fixes manually and runs QA again
 ```
+
+### Output files when stopped:
+
+- `fix_summary.md` - Summary of blocking issues and options
+- `autofix_state.json` - State for debugging
 
 ---
 

@@ -72,7 +72,7 @@ const options = parseArgs();
 const RUN_ID = options.runId || process.env.RUN_ID || utils.getLatestRunId();
 
 // AutoFix configuration
-const AUTOFIX_MAX_RETRIES = 2;
+const AUTOFIX_MAX_ATTEMPTS_PER_SPEC = 2;
 
 // Protected files (source of truth - never modify in autofix)
 const PROTECTED_FILES = [
@@ -80,6 +80,196 @@ const PROTECTED_FILES = [
     '40_spec/spec.md',
     '30_debate/debate.inputs_for_spec.json'
 ];
+
+/**
+ * AutoFix State Management
+ * Tracks attempts per spec version to enforce the 2-attempt limit
+ */
+const getAutofixStatePath = (runId) => {
+    return path.join(REPO_ROOT, 'artifacts', 'runs', runId, '60_verification', 'autofix_state.json');
+};
+
+const loadAutofixState = (runId) => {
+    const statePath = getAutofixStatePath(runId);
+    if (fs.existsSync(statePath)) {
+        try {
+            return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        } catch (e) {
+            console.warn('Warning: Could not parse autofix_state.json, starting fresh');
+        }
+    }
+    // Default state
+    return {
+        spec_version: 1,
+        attempt_in_spec: 0,
+        last_failure_fingerprint: null,
+        history: []
+    };
+};
+
+const saveAutofixState = (runId, state) => {
+    const statePath = getAutofixStatePath(runId);
+    const dir = path.dirname(statePath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');
+    return statePath;
+};
+
+/**
+ * Generate failure fingerprint for tracking same errors
+ */
+const generateFailureFingerprint = (blockingIssues) => {
+    const key = blockingIssues
+        .map(i => `${i.check}:${i.triage?.category || 'unknown'}`)
+        .sort()
+        .join('|');
+    // Simple hash
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+        const char = key.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+};
+
+/**
+ * Check if autofix should proceed or stop
+ */
+const shouldProceedWithAutofix = (state, fingerprint) => {
+    // If this is a new failure pattern, reset attempt count
+    if (state.last_failure_fingerprint !== fingerprint) {
+        return {
+            proceed: true,
+            reason: 'new_failure_pattern',
+            attemptsRemaining: AUTOFIX_MAX_ATTEMPTS_PER_SPEC
+        };
+    }
+
+    // Same failure pattern - check attempt count
+    if (state.attempt_in_spec >= AUTOFIX_MAX_ATTEMPTS_PER_SPEC) {
+        return {
+            proceed: false,
+            reason: 'max_attempts_reached',
+            attemptsRemaining: 0
+        };
+    }
+
+    return {
+        proceed: true,
+        reason: 'attempts_remaining',
+        attemptsRemaining: AUTOFIX_MAX_ATTEMPTS_PER_SPEC - state.attempt_in_spec
+    };
+};
+
+/**
+ * Increment autofix attempt and update state
+ */
+const recordAutofixAttempt = (runId, state, fingerprint, blockingIssues) => {
+    const newState = {
+        ...state,
+        attempt_in_spec: state.attempt_in_spec + 1,
+        last_failure_fingerprint: fingerprint,
+        last_attempt_at: new Date().toISOString(),
+        history: [
+            ...state.history,
+            {
+                attempt: state.attempt_in_spec + 1,
+                spec_version: state.spec_version,
+                fingerprint,
+                timestamp: new Date().toISOString(),
+                issues: blockingIssues.map(i => ({
+                    check: i.check,
+                    category: i.triage?.category || 'unknown',
+                    fixable: i.triage?.fixable || false
+                }))
+            }
+        ]
+    };
+    saveAutofixState(runId, newState);
+    return newState;
+};
+
+/**
+ * Reset autofix state after spec version bump (user approved change)
+ */
+const bumpSpecVersion = (runId) => {
+    const state = loadAutofixState(runId);
+    const newState = {
+        ...state,
+        spec_version: state.spec_version + 1,
+        attempt_in_spec: 0,
+        last_failure_fingerprint: null,
+        spec_bumped_at: new Date().toISOString()
+    };
+    saveAutofixState(runId, newState);
+    console.log(`[AUTOFIX] Spec version bumped to ${newState.spec_version}, attempt counter reset`);
+    return newState;
+};
+
+/**
+ * Generate fix_summary.md when autofix stops
+ */
+const generateFixSummary = (runId, state, blockingIssues) => {
+    const content = `# AutoFix Summary - Requires Manual Intervention
+
+## Status: STOPPED
+
+AutoFix has reached the maximum number of attempts (${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}) for spec version ${state.spec_version}.
+
+---
+
+## Current Blocking Issues
+
+${blockingIssues.map((issue, i) => `
+### ${i + 1}. [${issue.check}] ${issue.message}
+
+- **Category:** ${issue.triage?.category || 'unknown'}
+- **Fixable within spec:** ${issue.triage?.fixable ? 'Yes' : 'No'}
+- **Suggestion:** ${issue.action || 'Review manually'}
+`).join('\n')}
+
+---
+
+## Attempt History
+
+| Attempt | Spec Version | Timestamp | Issues |
+|---------|--------------|-----------|--------|
+${state.history.map(h =>
+    `| ${h.attempt} | v${h.spec_version} | ${h.timestamp.slice(0, 16)} | ${h.issues.map(i => i.check).join(', ')} |`
+).join('\n')}
+
+---
+
+## Options
+
+### Option A: Fix Manually
+Review the blocking issues above and fix them in the codebase.
+Then run \`npx aat qa\` again.
+
+### Option B: Change Specification
+If the issues require spec changes, review \`CHANGE_REQUEST.md\` (if exists)
+and approve the changes by running:
+\`\`\`
+npx aat approve-change
+\`\`\`
+
+### Option C: Reduce Scope
+Remove the blocking features from MVP scope.
+
+---
+
+*AutoFix stopped at ${new Date().toISOString()}*
+*Spec Version: ${state.spec_version} | Attempts: ${state.attempt_in_spec}/${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}*
+`;
+
+    if (RUN_ID) {
+        utils.writeArtifact(runId, 'verification', 'fix_summary.md', content);
+    }
+    return content;
+};
 
 /**
  * Triage failure - determine if fixable within spec
@@ -349,8 +539,12 @@ const runQAGate = async () => {
     console.log(`  Build: ${config.hasBuild ? config.buildTool : 'Not found'}`);
     console.log(`  Package Manager: ${config.packageManager}\n`);
 
+    // Load autofix state
+    const autofixState = RUN_ID ? loadAutofixState(RUN_ID) : { spec_version: 1, attempt_in_spec: 0, history: [] };
+    console.log(`AutoFix State: spec v${autofixState.spec_version}, attempt ${autofixState.attempt_in_spec}/${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}\n`);
+
     const report = {
-        version: '1.1',
+        version: '1.2',
         run_id: RUN_ID || null,
         timestamp: new Date().toISOString(),
         project: {
@@ -360,8 +554,9 @@ const runQAGate = async () => {
         overall_status: 'pending',
         autofix: {
             enabled: true,
-            max_retries: AUTOFIX_MAX_RETRIES,
-            current_retry: 0,
+            max_attempts_per_spec: AUTOFIX_MAX_ATTEMPTS_PER_SPEC,
+            spec_version: autofixState.spec_version,
+            attempt_in_spec: autofixState.attempt_in_spec,
             protected_files: PROTECTED_FILES
         },
         summary: {
@@ -552,6 +747,28 @@ const runQAGate = async () => {
         report.overall_status = 'pass';
     }
 
+    // AutoFix state management
+    let autofixDecision = { proceed: true, reason: 'no_failures' };
+
+    if (report.overall_status === 'fail' && RUN_ID && report.blocking_issues.length > 0) {
+        const fingerprint = generateFailureFingerprint(report.blocking_issues);
+        autofixDecision = shouldProceedWithAutofix(autofixState, fingerprint);
+
+        // Record the attempt
+        const newState = recordAutofixAttempt(RUN_ID, autofixState, fingerprint, report.blocking_issues);
+        report.autofix.attempt_in_spec = newState.attempt_in_spec;
+        report.autofix.fingerprint = fingerprint;
+        report.autofix.can_proceed = autofixDecision.proceed;
+        report.autofix.decision_reason = autofixDecision.reason;
+
+        if (!autofixDecision.proceed) {
+            // Generate fix_summary.md when max attempts reached
+            generateFixSummary(RUN_ID, newState, report.blocking_issues);
+            console.log(`\n[STOP] AutoFix has reached max attempts (${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}) for spec v${newState.spec_version}`);
+            console.log(`       See: artifacts/runs/latest/60_verification/fix_summary.md`);
+        }
+    }
+
     // Save artifacts
     if (RUN_ID) {
         const reportPath = utils.writeArtifact(RUN_ID, 'verification', 'report.json', report);
@@ -580,9 +797,14 @@ const runQAGate = async () => {
     console.log('========================================\n');
     console.log(`Overall Status: ${report.overall_status.toUpperCase()}`);
     console.log(`Checks: ${report.summary.passed}/${report.summary.total_checks} passed`);
+    console.log(`AutoFix: spec v${report.autofix.spec_version}, attempt ${report.autofix.attempt_in_spec}/${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}`);
 
-    if (report.summary.fixable_within_spec > 0) {
-        console.log(`\nAutoFix Eligible: ${report.summary.fixable_within_spec} issues (fixable within spec)`);
+    if (report.summary.fixable_within_spec > 0 && autofixDecision.proceed) {
+        console.log(`\nAutoFix Eligible: ${report.summary.fixable_within_spec} issues (${autofixDecision.attemptsRemaining} attempts remaining)`);
+    }
+    if (!autofixDecision.proceed) {
+        console.log(`\n🛑 AutoFix STOPPED: ${autofixDecision.reason}`);
+        console.log(`   Manual intervention required.`);
     }
     if (report.summary.requires_spec_change > 0) {
         console.log(`\n⚠️  Requires Spec Change: ${report.summary.requires_spec_change} issues`);
@@ -648,6 +870,18 @@ ${report.recommendations.length > 0 ?
 `;
 };
 
-runQAGate().then(success => {
-    process.exit(success ? 0 : 1);
-});
+// Export functions for use by other scripts (approve-change, etc.)
+module.exports = {
+    bumpSpecVersion,
+    loadAutofixState,
+    saveAutofixState,
+    generateFixSummary,
+    AUTOFIX_MAX_ATTEMPTS_PER_SPEC
+};
+
+// Run if executed directly
+if (require.main === module) {
+    runQAGate().then(success => {
+        process.exit(success ? 0 : 1);
+    });
+}
