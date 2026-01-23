@@ -209,7 +209,13 @@ const runSkillCommand = (skillPath, scriptPath, args = []) => {
     return 1;
   }
 
-  return result.status !== null ? result.status : 1;
+  // If status is null, process was likely killed by signal
+  if (result.status === null) {
+    log.error('Script process terminated by signal');
+    return 1;
+  }
+
+  return result.status;
 };
 
 // ============================================

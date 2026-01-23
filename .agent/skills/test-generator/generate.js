@@ -44,6 +44,9 @@ try {
 // Detect testing framework
 function detectFramework(projectRoot) {
   const pkgPath = path.join(projectRoot, 'package.json');
+  const requirementsPath = path.join(projectRoot, 'requirements.txt');
+  const pyProjectTodo = path.join(projectRoot, 'pyproject.toml');
+
   if (fs.existsSync(pkgPath)) {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
@@ -51,7 +54,11 @@ function detectFramework(projectRoot) {
     if (deps.jest) return { runner: 'jest', ext: 'test.js' };
     if (deps.vitest) return { runner: 'vitest', ext: 'test.ts' };
     if (deps.mocha) return { runner: 'mocha', ext: 'spec.js' };
-    if (deps.pytest) return { runner: 'pytest', ext: '_test.py' };
+  }
+
+  // Python project detection
+  if (fs.existsSync(requirementsPath) || fs.existsSync(pyProjectTodo) || fs.existsSync(path.join(projectRoot, 'main.py'))) {
+    return { runner: 'pytest', ext: '_test.py' };
   }
 
   // Default to Jest

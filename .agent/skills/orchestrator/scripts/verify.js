@@ -148,133 +148,142 @@ const runCommand = (cmd, projectPath, timeoutMs = 60000) => {
     });
 
     return {
-        cmd,
+        command: cmd,
         exitCode: result.status,
         stdout: result.stdout || '',
         stderr: result.stderr || '',
         durationMs: Date.now() - startTime,
-        success: result.status === 0
+        passed: result.status === 0
     };
 };
 
 // Check must-not rules by scanning files
 const checkMustNotRules = (projectPath, constraints) => {
     const violations = [];
+    const scanPaths = [projectPath, path.join(projectPath, 'deploy')];
 
     // Check for auth violations
     if (constraints.auth === 'none') {
-        // Check package.json for auth deps
-        const pkgPath = path.join(projectPath, 'package.json');
-        if (fs.existsSync(pkgPath)) {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-            const authDeps = ['next-auth', 'passport', 'firebase-auth', 'jsonwebtoken', 'express-session'];
-            authDeps.forEach(dep => {
-                if (allDeps[dep]) {
-                    violations.push({
-                        type: 'MUST_NOT',
-                        rule: 'MUST NOT add authentication',
-                        detail: `Found auth dependency: ${dep} in package.json`
-                    });
-                }
-            });
-        }
+        scanPaths.forEach(scanPath => {
+            if (!fs.existsSync(scanPath)) return;
 
-        // Check requirements.txt for Python
-        const reqPath = path.join(projectPath, 'requirements.txt');
-        if (fs.existsSync(reqPath)) {
-            const reqs = fs.readFileSync(reqPath, 'utf8');
-            const authPyDeps = ['flask-login', 'django-allauth', 'python-jose', 'pyjwt'];
-            authPyDeps.forEach(dep => {
-                if (reqs.includes(dep)) {
-                    violations.push({
-                        type: 'MUST_NOT',
-                        rule: 'MUST NOT add authentication',
-                        detail: `Found auth dependency: ${dep} in requirements.txt`
-                    });
-                }
-            });
-        }
-
-        // Check env files for auth vars
-        const envFiles = ['env.example', '.env.example', '.env'];
-        envFiles.forEach(envFile => {
-            const envPath = path.join(projectPath, envFile);
-            if (fs.existsSync(envPath)) {
-                const envContent = fs.readFileSync(envPath, 'utf8');
-                if (envContent.includes('NEXTAUTH_') || envContent.includes('JWT_SECRET') || envContent.includes('SESSION_SECRET')) {
-                    violations.push({
-                        type: 'MUST_NOT',
-                        rule: 'MUST NOT add authentication',
-                        detail: `Found auth env vars in ${envFile}`
-                    });
-                }
+            // Check package.json for auth deps
+            const pkgPath = path.join(scanPath, 'package.json');
+            if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+                const authDeps = ['next-auth', 'passport', 'firebase-auth', 'jsonwebtoken', 'express-session'];
+                authDeps.forEach(dep => {
+                    if (allDeps[dep]) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add authentication',
+                            detail: `Found auth dependency: ${dep} in ${path.relative(projectPath, pkgPath)}`
+                        });
+                    }
+                });
             }
+
+            // Check requirements.txt for Python
+            const reqPath = path.join(scanPath, 'requirements.txt');
+            if (fs.existsSync(reqPath)) {
+                const reqs = fs.readFileSync(reqPath, 'utf8');
+                const authPyDeps = ['flask-login', 'django-allauth', 'python-jose', 'pyjwt'];
+                authPyDeps.forEach(dep => {
+                    if (reqs.includes(dep)) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add authentication',
+                            detail: `Found auth dependency: ${dep} in ${path.relative(projectPath, reqPath)}`
+                        });
+                    }
+                });
+            }
+
+            // Check env files for auth vars
+            const envFiles = ['env.example', '.env.example', '.env'];
+            envFiles.forEach(envFile => {
+                const envPath = path.join(scanPath, envFile);
+                if (fs.existsSync(envPath)) {
+                    const envContent = fs.readFileSync(envPath, 'utf8');
+                    if (envContent.includes('NEXTAUTH_') || envContent.includes('JWT_SECRET') || envContent.includes('SESSION_SECRET')) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add authentication',
+                            detail: `Found auth env vars in ${path.relative(projectPath, envPath)}`
+                        });
+                    }
+                }
+            });
         });
     }
 
     // Check for database violations
     if (constraints.db === 'none') {
-        // Check package.json
-        const pkgPath = path.join(projectPath, 'package.json');
-        if (fs.existsSync(pkgPath)) {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-            const dbDeps = ['prisma', '@prisma/client', 'sequelize', 'typeorm', 'mongoose', 'pg', 'mysql2', 'better-sqlite3'];
-            dbDeps.forEach(dep => {
-                if (allDeps[dep]) {
-                    violations.push({
-                        type: 'MUST_NOT',
-                        rule: 'MUST NOT add database',
-                        detail: `Found DB dependency: ${dep} in package.json`
-                    });
-                }
-            });
-        }
+        scanPaths.forEach(scanPath => {
+            if (!fs.existsSync(scanPath)) return;
 
-        // Check requirements.txt
-        const reqPath = path.join(projectPath, 'requirements.txt');
-        if (fs.existsSync(reqPath)) {
-            const reqs = fs.readFileSync(reqPath, 'utf8');
-            const dbPyDeps = ['sqlalchemy', 'psycopg2', 'pymysql', 'pymongo', 'sqlite3'];
-            dbPyDeps.forEach(dep => {
-                if (reqs.includes(dep)) {
-                    violations.push({
-                        type: 'MUST_NOT',
-                        rule: 'MUST NOT add database',
-                        detail: `Found DB dependency: ${dep} in requirements.txt`
-                    });
-                }
-            });
-        }
-
-        // Check docker-compose for db service
-        const composePath = path.join(projectPath, 'docker-compose.yml');
-        if (fs.existsSync(composePath)) {
-            const compose = fs.readFileSync(composePath, 'utf8');
-            if (compose.includes('postgres') || compose.includes('mysql') || compose.includes('mongo')) {
-                violations.push({
-                    type: 'MUST_NOT',
-                    rule: 'MUST NOT add database',
-                    detail: 'Found database service in docker-compose.yml'
+            // Check package.json
+            const pkgPath = path.join(scanPath, 'package.json');
+            if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+                const dbDeps = ['prisma', '@prisma/client', 'sequelize', 'typeorm', 'mongoose', 'pg', 'mysql2', 'better-sqlite3'];
+                dbDeps.forEach(dep => {
+                    if (allDeps[dep]) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add database',
+                            detail: `Found DB dependency: ${dep} in ${path.relative(projectPath, pkgPath)}`
+                        });
+                    }
                 });
             }
-        }
 
-        // Check env for DATABASE_URL
-        const envFiles = ['env.example', '.env.example', '.env'];
-        envFiles.forEach(envFile => {
-            const envPath = path.join(projectPath, envFile);
-            if (fs.existsSync(envPath)) {
-                const envContent = fs.readFileSync(envPath, 'utf8');
-                if (envContent.includes('DATABASE_URL') || envContent.includes('DB_HOST')) {
+            // Check requirements.txt
+            const reqPath = path.join(scanPath, 'requirements.txt');
+            if (fs.existsSync(reqPath)) {
+                const reqs = fs.readFileSync(reqPath, 'utf8');
+                const dbPyDeps = ['sqlalchemy', 'psycopg2', 'pymysql', 'pymongo', 'sqlite3'];
+                dbPyDeps.forEach(dep => {
+                    if (reqs.includes(dep)) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add database',
+                            detail: `Found DB dependency: ${dep} in ${path.relative(projectPath, reqPath)}`
+                        });
+                    }
+                });
+            }
+
+            // Check docker-compose for db service
+            const composePath = path.join(scanPath, 'docker-compose.yml');
+            if (fs.existsSync(composePath)) {
+                const compose = fs.readFileSync(composePath, 'utf8');
+                if (compose.includes('postgres') || compose.includes('mysql') || compose.includes('mongo')) {
                     violations.push({
                         type: 'MUST_NOT',
                         rule: 'MUST NOT add database',
-                        detail: `Found DB env vars in ${envFile}`
+                        detail: `Found database service in ${path.relative(projectPath, composePath)}`
                     });
                 }
             }
+
+            // Check env for DATABASE_URL
+            const envFiles = ['env.example', '.env.example', '.env'];
+            envFiles.forEach(envFile => {
+                const envPath = path.join(scanPath, envFile);
+                if (fs.existsSync(envPath)) {
+                    const envContent = fs.readFileSync(envPath, 'utf8');
+                    if (envContent.includes('DATABASE_URL') || envContent.includes('DB_HOST')) {
+                        violations.push({
+                            type: 'MUST_NOT',
+                            rule: 'MUST NOT add database',
+                            detail: `Found DB env vars in ${path.relative(projectPath, envPath)}`
+                        });
+                    }
+                }
+            });
         });
     }
 
@@ -521,7 +530,7 @@ const runVerify = async () => {
     report.summary.passedCount = gateValues.length - failedGates.length;
     report.status = failedGates.length > 0 ? 'FAIL' : 'PASS';
 
-    if (report.status === 'fail') {
+    if (report.status === 'FAIL') {
         report.summary.nextAction = `run npx aat fix --run-id ${runId}`;
     }
 
@@ -538,7 +547,7 @@ const runVerify = async () => {
         console.log(JSON.stringify(report, null, 2));
     } else {
         console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
-        if (report.status === 'pass') {
+        if (report.status === 'PASS') {
             console.log(`${c.green}${c.bold}✓ PASS${c.reset} - All gates passed`);
         } else {
             console.log(`${c.red}${c.bold}✗ FAIL${c.reset} - ${failedGates.length} gate(s) failed`);
@@ -548,7 +557,7 @@ const runVerify = async () => {
         console.log(`\nReport: ${c.dim}${path.join(verifyDir, 'verification.report.json')}${c.reset}\n`);
     }
 
-    process.exit(report.status === 'pass' ? 0 : 1);
+    process.exit(report.status === 'PASS' ? 0 : 1);
 };
 
 // Run

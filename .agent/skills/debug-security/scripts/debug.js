@@ -13,11 +13,12 @@ function analyzeFailures(report) {
 
   if (report.commands) {
     report.commands.forEach(cmd => {
-      if (cmd.exit_code !== 0) {
+      const exitCode = cmd.exitCode !== undefined ? cmd.exitCode : cmd.exit_code;
+      if (exitCode !== 0) {
         failures.push({
           command: cmd.name,
           cmd: cmd.cmd,
-          exit_code: cmd.exit_code,
+          exit_code: exitCode,
           logs_path: cmd.logs_path
         });
       }

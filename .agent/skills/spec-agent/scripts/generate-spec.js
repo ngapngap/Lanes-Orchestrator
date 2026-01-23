@@ -10,27 +10,34 @@ const path = require('path');
 
 function generateSpec(debate, intake) {
   const chosen = debate.options.find(o => o.id === debate.decision.chosen_option_id);
+  const project = intake.project || {};
+  const scope = intake.scope || {};
+  const constraints = intake.constraints || {};
 
   let md = `# spec.md
 
 ## Context
 
-${intake.goal || 'Project goal not specified'}
+${project.description || intake.goal || 'Project goal not specified'}
 
-**Users:** ${(intake.users || []).join(', ')}
+**Users:** ${(intake.target_users?.primary ? [intake.target_users.primary] : (intake.users || [])) .join(', ')}
 
 **Constraints:**
-${(intake.constraints || []).map(c => `- ${c}`).join('\n')}
+- Kind: ${project.kind || project.type || 'unknown'}
+- Language: ${project.language || constraints.language || 'unknown'}
+- Auth: ${constraints.auth || 'none'}
+- DB: ${constraints.db || 'none'}
+${(Array.isArray(constraints) ? constraints : []).map(c => `- ${c}`).join('\n')}
 
 ---
 
 ## Scope
 
 ### MVP
-${(intake.mvp_scope || []).map(s => `- ${s}`).join('\n')}
+${(scope.mvp_features || intake.mvp_scope || []).map(s => `- ${s}`).join('\n')}
 
 ### Non-goals
-${(intake.non_goals || []).map(n => `- ${n}`).join('\n')}
+${(scope.out_of_scope || intake.non_goals || []).map(n => `- ${n}`).join('\n')}
 
 ---
 

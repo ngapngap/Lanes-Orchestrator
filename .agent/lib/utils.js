@@ -47,7 +47,7 @@ const getRunId = (slug) => {
  */
 const getArtifactPath = (runId, phase) => {
   const phases = {
-    'user_request': '00_user_request.md',
+    'user_request': '00_user_request',
     'intake': '10_intake',
     'research': '20_research',
     'debate': '30_debate',

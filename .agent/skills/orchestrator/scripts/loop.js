@@ -106,7 +106,8 @@ const runVerify = (runId, projectPath, fast) => {
 const runFix = (runId, projectPath, attemptNum) => {
     const result = spawnSync('node', [
         path.join(REPO_ROOT, '.agent/skills/orchestrator/scripts/fix.js'),
-        '--run-id', runId
+        '--run-id', runId,
+        '--attempt-num', attemptNum.toString()
     ], {
         cwd: projectPath,
         encoding: 'utf8',

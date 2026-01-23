@@ -78,8 +78,8 @@ const runVibe = (prompt, promptId) => {
         timeout: 60000 // 1 minute timeout
     });
 
-    if (result.status !== 0 && result.status !== 1 && result.status !== 2) {
-        return { success: false, error: result.stderr || 'Unknown error', runDir: tempDir };
+    if (result.status !== 0) {
+        return { success: false, error: result.stderr || `Vibe failed with exit code ${result.status}`, runDir: tempDir, exitCode: result.status };
     }
 
     return { success: true, runDir: tempDir, exitCode: result.status };

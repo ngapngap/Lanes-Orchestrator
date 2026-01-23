@@ -265,7 +265,7 @@ Remove the blocking features from MVP scope.
 *Spec Version: ${state.spec_version} | Attempts: ${state.attempt_in_spec}/${AUTOFIX_MAX_ATTEMPTS_PER_SPEC}*
 `;
 
-    if (RUN_ID) {
+    if (runId) {
         utils.writeArtifact(runId, 'verification', 'fix_summary.md', content);
     }
     return content;

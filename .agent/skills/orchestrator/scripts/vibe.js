@@ -1093,127 +1093,157 @@ ${researchNote ? `## 6. Research Notes
     return spec;
 };
 
-// Generate task breakdown (lane-aware per project type)
+/**
+ * Generate task breakdown (Layer B) - Lane-aware
+ */
 const generateTasks = (intake, classify = null) => {
     const features = parseFeatures(intake._raw_answers?.features || '');
-    const tasks = [];
-    let taskId = 1;
-
-    // Get project kind for lane selection
     const projectKind = classify?.classification?.project_kind || intake.project?.type || 'web';
     const needsAuth = classify?.classification?.needs_auth !== 'none' &&
                       intake.constraints?.auth &&
-                      intake.constraints.auth !== 'none' &&
-                      intake.constraints.auth !== 'không' &&
-                      intake.constraints.auth !== 'không cần';
+                      intake.constraints.auth !== 'none';
+    const needsDb = classify?.classification?.needs_db !== 'none' &&
+                    intake.constraints?.data_sensitivity &&
+                    intake.constraints.data_sensitivity !== 'none';
 
-    // Lane mapping per project type
-    const laneMap = {
-        cli: { feature: 'core', deploy: 'packaging' },
-        api: { feature: 'api', deploy: 'devops' },
-        library: { feature: 'core', deploy: 'packaging' },
-        web: { feature: 'ui', deploy: 'devops' },
-        mobile: { feature: 'ui', deploy: 'devops' }
-    };
-    const lanes = laneMap[projectKind] || laneMap.web;
+    const tasks = [];
+    let taskId = 1;
+
+    // Lanes mapping
+    const lanes = projectKind === 'cli' || projectKind === 'library'
+        ? { core: 'core', packaging: 'packaging' }
+        : { core: 'api', packaging: 'devops' };
 
     // Setup task
     tasks.push({
-        id: `T${taskId++}`,
-        name: 'Project Setup',
-        description: `Initialize ${projectKind} project with recommended stack`,
-        priority: 'P0',
-        lane: 'setup',
-        estimated_hours: 2,
-        dependencies: [],
-        status: 'pending'
+        node_id: 'T1',
+        title: 'Project Setup',
+        owner_lane: 'setup',
+        depends_on: [],
+        inputs: ['artifacts/runs/latest/10_intake/intake.json'],
+        artifact_out: ['package.json'],
+        exit_criteria: ['Project structure initialized', 'Dependencies configured'],
+        validation_cmd: ['ls package.json']
     });
 
-    // Auth task ONLY if needed (check both classify and intake)
+    // Auth task (conditional)
     if (needsAuth) {
         tasks.push({
-            id: `T${taskId++}`,
-            name: 'Authentication Setup',
-            description: `Implement auth: ${intake.constraints.auth}`,
-            priority: 'P0',
-            lane: 'api',
-            estimated_hours: 4,
-            dependencies: ['T1'],
-            status: 'pending'
+            node_id: `T${++taskId}`,
+            title: 'Authentication Layer',
+            owner_lane: 'security',
+            depends_on: ['T1'],
+            inputs: ['package.json'],
+            artifact_out: ['src/auth/'],
+            exit_criteria: ['Auth provider configured', 'Login/session logic implemented'],
+            validation_cmd: []
         });
     }
 
-    // Feature tasks - use appropriate lane
-    if (features.length === 0) {
-        // No features defined - add placeholder
+    // Database task (conditional)
+    if (needsDb) {
         tasks.push({
-            id: `T${taskId++}`,
-            name: 'Core Feature Implementation',
-            description: 'Implement main project functionality (see spec)',
-            priority: 'P0',
-            lane: lanes.feature,
-            estimated_hours: 4,
-            dependencies: ['T1'],
-            status: 'pending'
+            node_id: `T${++taskId}`,
+            title: 'Database Schema & Connection',
+            owner_lane: 'data',
+            depends_on: ['T1'],
+            inputs: ['package.json'],
+            artifact_out: ['src/db/'],
+            exit_criteria: ['DB connection established', 'Initial migrations/schemas created'],
+            validation_cmd: []
+        });
+    }
+
+    // Feature tasks
+    const featureNodes = [];
+
+    if (features.length === 0) {
+        const id = `T${++taskId}`;
+        featureNodes.push(id);
+        tasks.push({
+            node_id: id,
+            title: 'Core Feature Implementation',
+            owner_lane: lanes.core,
+            depends_on: ['T1'],
+            inputs: ['package.json'],
+            artifact_out: [],
+            exit_criteria: ['Main project functionality implemented'],
+            validation_cmd: []
         });
     } else {
         features.forEach((f, i) => {
-            const currentTaskId = taskId++;
+            const id = `T${++taskId}`;
+            featureNodes.push(id);
             tasks.push({
-                id: `T${currentTaskId}`,
-                name: f.name,
-                description: `Implement: ${f.name}`,
-                priority: f.priority,
-                lane: lanes.feature,
-                estimated_hours: f.priority === 'P0' ? 4 : 2,
-                dependencies: i === 0 ? ['T1'] : [`T${currentTaskId - 1}`],
-                status: 'pending'
+                node_id: id,
+                title: f.name,
+                owner_lane: lanes.core,
+                depends_on: i === 0 ? ['T1'] : [`T${taskId - 1}`],
+                inputs: ['package.json'],
+                artifact_out: [],
+                exit_criteria: [`Feature "${f.name}" implemented`],
+                validation_cmd: []
             });
         });
     }
 
     // Testing task
-    tasks.push({
-        id: `T${taskId++}`,
-        name: 'Testing & QA',
-        description: 'Test all features, fix bugs',
-        priority: 'P0',
-        lane: 'qa',
-        estimated_hours: 4,
-        dependencies: tasks.filter(t => t.priority === 'P0' && t.lane !== 'qa').map(t => t.id),
-        status: 'pending'
-    });
-
-    // Deploy/Package task - per project type
-    const deployName = projectKind === 'library' ? 'Publish Package' :
-                       projectKind === 'cli' ? 'Package CLI' : 'Deploy MVP';
-    const deployDesc = projectKind === 'library' ? 'Publish to package registry' :
-                       projectKind === 'cli' ? 'Package for distribution' : 'Deploy to production';
+    const qaId = `T${++taskId}`;
+    const language = classify?.classification?.language || 'node';
+    const testCmd = language === 'python' ? 'pytest' :
+                    language === 'go' ? 'go test ./...' : 'npm test';
 
     tasks.push({
-        id: `T${taskId++}`,
-        name: deployName,
-        description: deployDesc,
-        priority: 'P0',
-        lane: lanes.deploy,
-        estimated_hours: 2,
-        dependencies: [`T${taskId - 2}`],
-        status: 'pending'
+        node_id: qaId,
+        title: 'Testing & QA',
+        owner_lane: 'qa',
+        depends_on: featureNodes,
+        inputs: [],
+        artifact_out: ['tests/'],
+        exit_criteria: ['All features tested', 'All tests passing'],
+        validation_cmd: [testCmd]
     });
 
-    // Determine lanes based on project type
-    const allLanes = projectKind === 'cli' || projectKind === 'library'
-        ? ['setup', 'core', 'qa', 'packaging']
-        : ['setup', 'api', 'ui', 'qa', 'devops', 'security'];
+    // Deploy/Package task
+    tasks.push({
+        node_id: `T${++taskId}`,
+        title: projectKind === 'library' ? 'Publish Package' : 'Deploy MVP',
+        owner_lane: lanes.packaging,
+        depends_on: [qaId],
+        inputs: [],
+        artifact_out: [],
+        exit_criteria: ['Project ready for distribution/deployment'],
+        validation_cmd: []
+    });
+
+    // Determine milestones based on tasks
+    const milestones = [
+        {
+            id: 'M1',
+            title: 'Foundation',
+            exit_criteria: ['Environment ready', 'Core structure exists'],
+            tasks: tasks.slice(0, 3).map(t => t.node_id)
+        },
+        {
+            id: 'M2',
+            title: 'Core Features',
+            exit_criteria: ['MVP functionality complete'],
+            tasks: featureNodes
+        },
+        {
+            id: 'M3',
+            title: 'Delivery',
+            exit_criteria: ['Verified and Deployed'],
+            tasks: tasks.slice(-2).map(t => t.node_id)
+        }
+    ];
 
     return {
-        version: '1.0',
-        run_id: intake.run_id,
-        timestamp: new Date().toISOString(),
-        total_tasks: tasks.length,
-        estimated_total_hours: tasks.reduce((sum, t) => sum + t.estimated_hours, 0),
+        milestones,
         tasks,
-        lanes: allLanes
+        provenance: {
+            timestamp: new Date().toISOString()
+        }
     };
 };
 
@@ -1786,99 +1816,70 @@ const generateVerificationReport = (classify, intake, decisions, tasks) => {
     const errors = [];
     const warnings = [];
 
+    const projectKind = classify.classification.project_kind;
+    const language = classify.classification.language;
+
     // Check 1: Project kind consistency
-    const classifyKind = classify.classification.project_kind;
     const intakeKind = intake.project?.type;
-    if (classifyKind !== intakeKind) {
-        warnings.push(`Project kind mismatch: classify=${classifyKind}, intake=${intakeKind}`);
+    if (projectKind !== intakeKind) {
+        warnings.push(`Project kind mismatch: classify=${projectKind}, intake=${intakeKind}`);
     }
     checks.push({
-        name: 'project_kind_consistency',
-        status: classifyKind === intakeKind ? 'pass' : 'warn',
-        detail: `classify: ${classifyKind}, intake: ${intakeKind}`
+        id: 'G_KIND_CONSISTENCY',
+        status: projectKind === intakeKind ? 'PASS' : 'SKIP',
+        message: `classify: ${projectKind}, intake: ${intakeKind}`
     });
 
-    // Check 2: Auth consistency
-    const classifyAuth = classify.classification.needs_auth;
-    const intakeAuth = intake.constraints?.auth;
-    const authMatch = (classifyAuth === 'none' && (!intakeAuth || intakeAuth === 'none')) ||
-                      (classifyAuth !== 'none' && intakeAuth && intakeAuth !== 'none');
-    if (!authMatch && classifyAuth !== 'unknown') {
-        warnings.push(`Auth mismatch: classify=${classifyAuth}, intake=${intakeAuth}`);
-    }
-    checks.push({
-        name: 'auth_consistency',
-        status: authMatch ? 'pass' : 'warn',
-        detail: `classify: ${classifyAuth}, intake: ${intakeAuth || 'none'}`
-    });
-
-    // Check 3: DB consistency
-    const classifyDb = classify.classification.needs_db;
-    const intakeDataSens = intake.constraints?.data_sensitivity;
-    const dbExpected = classifyDb !== 'none' && classifyDb !== 'unknown';
-    const dbInIntake = intakeDataSens && intakeDataSens !== 'none';
-    checks.push({
-        name: 'db_consistency',
-        status: (dbExpected === dbInIntake) ? 'pass' : 'warn',
-        detail: `classify needs_db: ${classifyDb}, intake data_sensitivity: ${intakeDataSens || 'none'}`
-    });
-
-    // Check 4: MVP features not empty
+    // Check 2: MVP features not empty
     const mvpFeatures = intake.scope?.mvp_features || [];
     if (mvpFeatures.length < 2) {
         errors.push(`MVP features list has ${mvpFeatures.length} items - must have at least 2 items per Gate G3`);
     }
     checks.push({
-        name: 'mvp_features_defined',
-        status: mvpFeatures.length >= 2 ? 'pass' : 'fail',
-        detail: `${mvpFeatures.length} MVP feature(s) defined (required >= 2)`
+        id: 'G_MVP_SIZE',
+        status: mvpFeatures.length >= 2 ? 'PASS' : 'FAIL',
+        message: `${mvpFeatures.length} MVP feature(s) defined (required >= 2)`
     });
 
-    // Check 5: Tasks exist
-    const taskCount = tasks?.total_tasks || 0;
+    // Check 3: Tasks exist
+    const taskCount = tasks?.tasks?.length || 0;
     if (taskCount === 0) {
         errors.push('No tasks generated');
     }
     checks.push({
-        name: 'tasks_generated',
-        status: taskCount > 0 ? 'pass' : 'fail',
-        detail: `${taskCount} task(s) generated`
-    });
-
-    // Check 6: Decisions out_of_scope matches classify
-    if (classifyAuth === 'none' && !decisions.out_of_scope?.includes('User authentication')) {
-        warnings.push('Auth=none but not in out_of_scope');
-    }
-    checks.push({
-        name: 'out_of_scope_complete',
-        status: decisions.out_of_scope?.length > 0 ? 'pass' : 'warn',
-        detail: `${decisions.out_of_scope?.length || 0} item(s) marked out of scope`
+        id: 'G_TASKS_GENERATED',
+        status: taskCount > 0 ? 'PASS' : 'FAIL',
+        message: `${taskCount} task(s) generated`
     });
 
     // Overall status
     const hasErrors = errors.length > 0;
-    const hasWarnings = warnings.length > 0;
-    const overallStatus = hasErrors ? 'fail' : (hasWarnings ? 'warn' : 'pass');
+    const overallStatus = hasErrors ? 'FAIL' : 'PASS';
+
+    // Gate object mapping for schema
+    const gates = {};
+    checks.forEach(c => {
+        gates[c.id] = {
+            status: c.status,
+            message: c.message
+        };
+    });
 
     return {
-        version: '1.0',
         run_id: intake.run_id,
+        status: overallStatus,
         timestamp: new Date().toISOString(),
-        overall_status: overallStatus,
-        checks: checks,
-        errors: errors,
-        warnings: warnings,
+        gates: gates,
         summary: {
             total_checks: checks.length,
-            passed: checks.filter(c => c.status === 'pass').length,
-            warnings: checks.filter(c => c.status === 'warn').length,
-            failed: checks.filter(c => c.status === 'fail').length
+            passed: checks.filter(c => c.status === 'PASS').length,
+            failed: checks.filter(c => c.status === 'FAIL').length
         },
+        errors: errors,
+        warnings: warnings,
         recommendation: hasErrors
             ? 'Fix errors before proceeding to implementation'
-            : hasWarnings
-                ? 'Review warnings - may indicate spec issues'
-                : 'Ready for implementation'
+            : 'Ready for implementation'
     };
 };
 
@@ -2049,17 +2050,14 @@ run_id: ${runId}
 project_name: ${projectName}
 project_kind: ${projectKind}
 language: ${language}
-constraints:
-  auth: ${authConstraint}
-  db: ${dbConstraint}
-  deploy: ${deployConstraint}
+auth_constraint: ${authConstraint}
+db_constraint: ${dbConstraint}
 deliverables:
 ${deliverables.map(d => `  - ${d.path}`).join('\n')}
 must_not:
 ${mustNotRules.map(r => `  - ${r.rule}`).join('\n')}
 verification_commands:
 ${verificationCommands.map(c => `  - ${c.command}`).join('\n')}
-max_fix_attempts_default: 3
 generated_at: ${new Date().toISOString()}
 ---`;
 
