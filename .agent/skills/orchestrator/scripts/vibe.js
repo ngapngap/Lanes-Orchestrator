@@ -582,7 +582,7 @@ const getAnswersNonInteractive = async (options) => {
 
     // Extract features from description if not provided
     if (!answers.features && description) {
-        answers.features = extractFeaturesFromDescription(description);
+        answers.features = extractFeaturesFromDescription(description, typeInfo?.id);
     }
 
     return answers;
@@ -590,21 +590,48 @@ const getAnswersNonInteractive = async (options) => {
 
 /**
  * Extract features from description using simple heuristics
+ * Ensures at least 2 items per Gate G3 (DoD vNext 4.2.5)
  */
-const extractFeaturesFromDescription = (description) => {
-    // Look for flag patterns like --health, --version
+const extractFeaturesFromDescription = (description, projectType = 'web') => {
+    const features = [];
+    const text = description.toLowerCase();
+
+    // 1. Look for flag patterns like --health, --version
     const flagMatches = description.match(/--\w+/g);
     if (flagMatches) {
-        return flagMatches.map(f => f.replace('--', '')).join(', ');
+        flagMatches.forEach(f => features.push(f.replace('--', '') + ' flag'));
     }
 
-    // Look for "prints X", "outputs Y", "generates Z"
-    const actionMatches = description.match(/(?:prints?|outputs?|generates?|creates?|shows?)\s+["']?([^"',]+)["']?/gi);
+    // 2. Look for "prints X", "outputs Y", "generates Z"
+    const actionMatches = description.match(/(?:prints?|outputs?|generates?|creates?|shows?)\s+["']?([^"',.]+)["']?/gi);
     if (actionMatches) {
-        return actionMatches.map(m => m.replace(/^(prints?|outputs?|generates?|creates?|shows?)\s+/i, '')).join(', ');
+        actionMatches.forEach(m => {
+            const feature = m.replace(/^(prints?|outputs?|generates?|creates?|shows?)\s+/i, '').trim();
+            if (feature) features.push(feature);
+        });
     }
 
-    return '';
+    // 3. Fallback/Default features based on project kind to ensure >= 2 items (Gate G3)
+    const defaultsByKind = {
+        cli: ['--help usage info', '--version info'],
+        api: ['health check endpoint', 'api documentation'],
+        web: ['home page', 'responsive layout'],
+        library: ['core function implementation', 'unit tests'],
+        mobile: ['main screen', 'navigation']
+    };
+
+    const kindDefaults = defaultsByKind[projectType] || defaultsByKind.web;
+
+    // Add defaults until we have at least 2
+    let i = 0;
+    while (features.length < 2 && i < kindDefaults.length) {
+        if (!features.some(f => f.toLowerCase().includes(kindDefaults[i].split(' ')[0]))) {
+            features.push(kindDefaults[i]);
+        }
+        i++;
+    }
+
+    return features.join(', ');
 };
 
 // Collect answers (interactive TTY mode)
