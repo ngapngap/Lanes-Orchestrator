@@ -497,12 +497,14 @@ const VIBE_QUESTIONS = Object.values(BASE_QUESTIONS);
 
 // Read stdin as string (for --answers-stdin)
 const readStdin = () => new Promise((resolve) => {
+    if (process.stdin.isTTY) {
+        return resolve('');
+    }
     let data = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', chunk => data += chunk);
     process.stdin.on('end', () => resolve(data.trim()));
-    // Timeout after 100ms if no data
-    setTimeout(() => resolve(data.trim()), 100);
+    process.stdin.on('error', () => resolve(data.trim()));
 });
 
 // Get answers from non-interactive sources
@@ -1156,14 +1158,15 @@ const generateTasks = (intake, classify = null) => {
         });
     } else {
         features.forEach((f, i) => {
+            const currentTaskId = taskId++;
             tasks.push({
-                id: `T${taskId++}`,
+                id: `T${currentTaskId}`,
                 name: f.name,
                 description: `Implement: ${f.name}`,
                 priority: f.priority,
                 lane: lanes.feature,
                 estimated_hours: f.priority === 'P0' ? 4 : 2,
-                dependencies: i === 0 ? ['T1'] : [`T${taskId - 2}`],
+                dependencies: i === 0 ? ['T1'] : [`T${currentTaskId - 1}`],
                 status: 'pending'
             });
         });

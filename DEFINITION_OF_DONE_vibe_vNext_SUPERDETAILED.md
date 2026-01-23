@@ -452,55 +452,51 @@ DoD achieved only when regression suite passes.
 
 ---
 
-## 10) Audit Log: Phase 1 (Vibe vNext) Compliance Check
+## 10) Báo cáo kiểm soát tuân thủ (Final Technical Audit) - 2026-01-23
 
-Dưới đây là kết quả kiểm tra sự tuân thủ (Compliance) đối với bộ quy chuẩn DoD vNext sau khi rà soát mã nguồn.
+Dưới đây là kết quả rà soát chi tiết mã nguồn hiện tại so với đặc tả DoD vNext.
 
-### 10.1 Checklist: Absolute Gates
-- [x] **Gate G1 (Prompt-negation)**: **PASS**. Logic triệt tiêu auth/db trong `vibe.js` hoạt động tốt.
-- [x] **Gate G2 (Kind/Lang Correctness)**: **PASS**. Classifier nhận diện chính xác qua Regex.
-- [ ] **Gate G3 (MVP Size >= 2)**: 🔴 **FAIL**. `vibe.js:1763` vẫn chấp nhận 1 item (chỉ check rỗng).
-- [x] **Gate G4 (Tasks implementable)**: **PASS**. Task breakdown đầy đủ lane và description.
-- [x] **Gate G5 (Research relevance)**: **PASS**. Query được tối ưu theo Project Kind thay vì fallback.
-- [x] **Gate G6 (Deploy kit consistency)**: **PASS**. Docker compose respect `db=none`.
+### 10.1 `vibe.js`: Lỗi logic & Cấu trúc - 🟡 PARTIAL
+- **MVP Enforcement (Gate G3)**: 🔴 **FAIL**. Code tại line 1112 (`if (features.length === 0)`) chỉ chặn mảng rỗng. Đặc tả DoD yêu cầu tối thiểu **2 items**. Mặc dù `generateVerificationReport` có check lỗi này nhưng bộ generator vẫn sinh ra spec thiếu chuẩn.
+- **Versioning (DoD 4.2.4)**: 🟢 **PASS**. Line 834 đã cập nhật `version: '1.1'` cho `intake.json`.
+- **Field Consistency**:
+    - 🔴 **FAIL**: Line 865 dùng key `_raw_answers`. Đặc tả DoD yêu cầu `_raw`.
+    - 🟢 **PASS**: Line 840 đã có `kind: projectType`.
+- **Exit Codes (DoD 3.3)**: 🟢 **PASS**. Line 2791 trả về `exit(1)` khi verify fail, line 2803 trả về `exit(2)` cho runtime error.
+- **DoD Generation**: 🟢 **PASS**. Đã có hàm `generateDefinitionOfDone` sinh file tự động.
 
-### 10.2 Checklist: Technical Standards
-- [ ] **Versioning**: 🔴 **FAIL**. `intake.json` vẫn ở version `1.0` (vibe.js:809). Kỳ vọng `1.1`.
-- [ ] **Schema Compliance**: 🔴 **FAIL**. Thiếu field `project.kind` trong output intake.
-- [ ] **CLI Exit Codes**: 🔴 **FAIL**. Gate failure trả về `exit(2)` (vibe.js:2333). Kỳ vọng `exit(1)`.
-- [ ] **Schemas**: 🟡 **PARTIAL**. Đã có file schema nhưng chưa được đưa vào `selfcheck.js` (line 73).
-- [ ] **Standalone Tools**: 🔴 **FAIL**. `search-github.js` chưa đồng bộ logic `why_relevant` như trong `vibe.js`.
+### 10.2 `search-github.js`: Lạc hậu so với hệ thống - 🔴 FAIL
+- **Data Source (DoD 4.3.1)**: 🔴 **FAIL**. Script chưa được cập nhật để đọc `classify.json`. Vẫn đang lấy keyword từ `intake.project.type` (line 128).
+- **Output Schema**: 🟢 **PASS**. Đã có `status`, `why_relevant`, `pattern_to_reuse` và `relevance_score`.
 
-### 10.3 Checklist: GitHub Cleanliness
-- [ ] **Artifacts**: 🔴 **FAIL**. Thư mục `artifacts/runs/` chưa được ignore trong `.gitignore`.
-- [ ] **OS Garbage**: 🔴 **FAIL**. File `nul` vẫn tồn tại ở root.
+### 10.3 Cleanliness & DevOps - 🟡 PARTIAL
+- **Git Hygiene**: 🟢 **PASS**. `.gitignore` đã ignore `artifacts/runs/` (line 30) và `nul` (line 29).
+- **Self-check (DoD 8)**: 🔴 **FAIL**. `selfcheck.js:73` chưa được cập nhật để kiểm tra `schemas/classify.schema.json`.
 
 ---
 
-## 11) Definition of Done: Phase 2 (Verify & Fix Loop)
+## 11) Đặc tả DoD cho Phase 2: "The Self-Correction Engine"
 
-Các tiêu chí bắt buộc để hoàn thành hệ thống "Tự chứng thực và tự sửa lỗi" (Self-healing).
+Hệ thống được coi là hoàn thiện khi Agent có khả năng tự kiểm soát chất lượng qua "Hợp đồng DoD".
 
-### 11.1 Artifact: The DoD Contract
-- [ ] **Automatic Generation**: File `40_spec/DEFINITION_OF_DONE.md` phải được sinh ra tự động sau mỗi run `vibe`.
-- [ ] **Metadata**: Chứa YAML Frontmatter hợp lệ (`run_id`, `project_kind`, `language`, `constraints`).
-- [ ] **Deliverables Integrity**: Danh sách file/folder vật lý bắt buộc theo stack (vd: Python CLI phải có `src/`).
-- [ ] **Verification Commands**: Danh sách lệnh shell (`npm test`, `pytest`, `curl`) để máy tự thực thi verify.
-- [ ] **Anti-Drift rules**: Danh sách các trạng thái cấm (vd: `no-auth` thì không được có `auth` vars).
+### 11.1 Artifact: The DoD Contract (40_spec/DEFINITION_OF_DONE.md)
+- [x] **Automatic Generation**: Đã được sinh ra trong `vibe.js`.
+- [x] **Metadata**: Chứa YAML Frontmatter đầy đủ.
+- [x] **Verification Commands**: Chứa danh sách lệnh thực thi theo ngôn ngữ.
+- [ ] **Anti-Drift rules**: Cần bổ sung logic phát hiện các thư viện bị cấm (vd: `next-auth` khi `no-auth`).
 
-### 11.2 System: The Loop Engine
-- [ ] **Command `aat verify`**: Thực thi toàn bộ checklist trong DoD.md và sinh report JSON chuẩn.
-- [ ] **Command `aat loop`**: Vòng lặp `verify -> fix -> verify` tự động cho đến khi PASS hoặc hết lượt.
-- [ ] **Context Injection**: Lệnh `fix` phải nhận report từ bước `verify` để sửa lỗi chính xác.
+### 11.2 Logic: The Auto-Fix Loop
+- [ ] **Command `aat verify`**: Chưa triển khai engine thực thi shell.
+- [ ] **Command `aat loop`**: Chưa triển khai.
 
 ---
 
-## 12) Kết luận đánh giá (Final Verdict)
+## 12) Tổng kết Gap Analysis (2026-01-23)
 
-| Module | Trạng thái | Ghi chú |
-|--------|------------|---------|
-| **Vibe (Planning)** | 🟡 85% | Cần fix versioning, exit codes và đồng bộ field `kind`. |
-| **Verify (Check)** | 🔴 10% | Mới có khung báo cáo tĩnh, thiếu engine thực thi lệnh shell. |
-| **Fix Loop (Healing)** | 🔴 0% | Chưa triển khai. |
+| Module | Độ phủ DoD | Tình trạng |
+|--------|------------|------------|
+| **Vibe (Planning)** | 🟢 90% | Rất tốt, chỉ còn sai lệch nhỏ về đặt tên trường (`_raw`) và enforce MVP size. |
+| **Verify (Guard)** | 🟡 20% | Đã có template DoD.md động, thiếu engine thực thi lệnh. |
+| **Fix Loop (Healing)** | 🔴 0% | Chưa triển khai mã nguồn. |
 
-**Nhận xét cuối:** Dự án đã hoàn thành xuất sắc khâu "Vẽ thiết kế" (Planning). Tuy nhiên, để đạt trình độ Agentic hoàn chỉnh, cần tập trung dứt điểm Technical Debt ở Mục 10 trước khi xây dựng "Hệ thống tự sửa lỗi" ở Mục 11.
+**Nhận xét cuối:** Dự án đã đạt được các cột mốc quan trọng của Phase 1. Cần thực hiện một đợt "Minor Cleanup" để đồng bộ hóa `_raw` field và cập nhật `search-github.js` trước khi chuyển sang Phase 2.

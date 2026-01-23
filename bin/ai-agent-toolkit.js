@@ -95,7 +95,7 @@ const discoverSkills = () => {
           path: path.join(SKILLS_DIR, skillName)
         };
       } catch (e) {
-        // Invalid manifest, skip
+        log.error(`Failed to parse manifest for skill '${skillName}': ${e.message}`);
       }
     }
   }
@@ -204,7 +204,12 @@ const runSkillCommand = (skillPath, scriptPath, args = []) => {
     env: { ...process.env }
   });
 
-  return result.status || 0;
+  if (result.error) {
+    log.error(`Failed to execute script: ${result.error.message}`);
+    return 1;
+  }
+
+  return result.status !== null ? result.status : 1;
 };
 
 // ============================================

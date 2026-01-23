@@ -95,21 +95,24 @@ const parseDodMetadata = (content) => {
 
     const yaml = match[1];
     const metadata = {};
+    let currentKey = null;
 
     yaml.split('\n').forEach(line => {
+        if (!line.trim() || line.startsWith('#')) return;
+
+        const isNested = line.startsWith('  ');
         const colonIdx = line.indexOf(':');
+
         if (colonIdx > 0) {
             const key = line.slice(0, colonIdx).trim();
             const value = line.slice(colonIdx + 1).trim();
-            if (key === 'constraints') {
-                metadata.constraints = {};
-            } else if (line.startsWith('  ')) {
-                // Nested under constraints
-                const nestedKey = key;
-                metadata.constraints = metadata.constraints || {};
-                metadata.constraints[nestedKey] = value;
+
+            if (isNested && currentKey) {
+                metadata[currentKey] = metadata[currentKey] || {};
+                metadata[currentKey][key] = value;
             } else {
                 metadata[key] = value;
+                currentKey = key;
             }
         }
     });
@@ -361,8 +364,8 @@ const runVerify = async () => {
     const report = {
         run_id: runId,
         timestamp: new Date().toISOString(),
-        status: 'pass',
-        gates: [],
+        status: 'PASS',
+        gates: {}, // Change from [] to {} (DoD vNext Fix)
         commands: [],
         violations: [],
         deliverables: [],
@@ -387,11 +390,12 @@ const runVerify = async () => {
         }
     });
 
-    report.gates.push({
+    report.gates.G_DELIVERABLES = {
         id: 'G_DELIVERABLES',
-        pass: deliverablesPass,
-        message: deliverablesPass ? 'All deliverables exist' : `${report.deliverables.filter(d => !d.exists).length} deliverable(s) missing`
-    });
+        status: deliverablesPass ? 'PASS' : 'FAIL',
+        message: deliverablesPass ? 'All deliverables exist' : `${report.deliverables.filter(d => !d.exists).length} deliverable(s) missing`,
+        details: { deliverables: report.deliverables }
+    };
 
     if (!options.json) {
         const missingCount = report.deliverables.filter(d => !d.exists).length;
@@ -411,11 +415,12 @@ const runVerify = async () => {
     report.violations = violations;
 
     const mustNotPass = violations.length === 0;
-    report.gates.push({
+    report.gates.G_MUST_NOT = {
         id: 'G_MUST_NOT',
-        pass: mustNotPass,
-        message: mustNotPass ? 'No violations found' : `${violations.length} violation(s) found`
-    });
+        status: mustNotPass ? 'PASS' : 'FAIL',
+        message: mustNotPass ? 'No violations found' : `${violations.length} violation(s) found`,
+        violations: violations
+    };
 
     if (!options.json) {
         if (mustNotPass) {
@@ -432,11 +437,11 @@ const runVerify = async () => {
     if (!options.json) console.log(`${c.yellow}[3/5]${c.reset} Checking MVP scope...`);
     const mvpFeatures = intake?.scope?.mvp_features || [];
     const mvpPass = mvpFeatures.length >= 2;
-    report.gates.push({
+    report.gates.G_MVP_SIZE = {
         id: 'G_MVP_SIZE',
-        pass: mvpPass,
+        status: mvpPass ? 'PASS' : 'FAIL',
         message: mvpPass ? `MVP features count: ${mvpFeatures.length}` : `MVP features count too low: ${mvpFeatures.length} (required >= 2)`
-    });
+    };
 
     if (!options.json) {
         if (mvpPass) {
@@ -473,19 +478,20 @@ const runVerify = async () => {
             }
         }
 
-        report.gates.push({
+        report.gates.G_COMMANDS = {
             id: 'G_COMMANDS',
-            pass: commandsPass,
-            message: commandsPass ? 'All commands passed' : 'Some commands failed'
-        });
+            status: commandsPass ? 'PASS' : 'FAIL',
+            message: commandsPass ? 'All commands passed' : 'Some commands failed',
+            details: { commands: report.commands }
+        };
 
         if (!options.json) console.log();
     } else {
-        report.gates.push({
+        report.gates.G_COMMANDS = {
             id: 'G_COMMANDS',
-            pass: true,
+            status: 'PASS',
             message: 'Skipped (--fast mode)'
-        });
+        };
         if (!options.json) console.log(`  ${c.dim}Skipped (--fast mode)${c.reset}\n`);
     }
 
@@ -494,11 +500,11 @@ const runVerify = async () => {
 
     const specPath = path.join(runDir, '40_spec', 'spec.md');
     const specExists = fs.existsSync(specPath);
-    report.gates.push({
+    report.gates.G_SPEC_EXISTS = {
         id: 'G_SPEC_EXISTS',
-        pass: specExists,
+        status: specExists ? 'PASS' : 'FAIL',
         message: specExists ? 'spec.md exists' : 'spec.md not found'
-    });
+    };
 
     if (!options.json) {
         if (specExists) {
@@ -509,10 +515,11 @@ const runVerify = async () => {
     }
 
     // Calculate overall status
-    const failedGates = report.gates.filter(g => !g.pass);
+    const gateValues = Object.values(report.gates);
+    const failedGates = gateValues.filter(g => g.status === 'FAIL');
     report.summary.failedCount = failedGates.length;
-    report.summary.passedCount = report.gates.length - failedGates.length;
-    report.status = failedGates.length > 0 ? 'fail' : 'pass';
+    report.summary.passedCount = gateValues.length - failedGates.length;
+    report.status = failedGates.length > 0 ? 'FAIL' : 'PASS';
 
     if (report.status === 'fail') {
         report.summary.nextAction = `run npx aat fix --run-id ${runId}`;

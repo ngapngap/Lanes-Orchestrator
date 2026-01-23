@@ -512,6 +512,17 @@ const parseLintResults = (output, tool) => {
         const warningMatch = output.match(/(\d+)\s+warnings?/);
         if (errorMatch) result.errors = parseInt(errorMatch[1]);
         if (warningMatch) result.warnings = parseInt(warningMatch[1]);
+    } else if (tool === 'biome') {
+        const errorMatch = output.match(/(\d+)\s+errors?/);
+        const warningMatch = output.match(/(\d+)\s+warnings?/);
+        if (errorMatch) result.errors = parseInt(errorMatch[1]);
+        if (warningMatch) result.warnings = parseInt(warningMatch[1]);
+    } else {
+        // Fallback for unknown tools: check for "error" or "fail" in output if exit code was non-zero
+        // Note: exit code is already handled in runQAGate
+        if (output.toLowerCase().includes('error') || output.toLowerCase().includes('fail')) {
+            result.errors = 1; // Assume at least one error
+        }
     }
 
     return result;
