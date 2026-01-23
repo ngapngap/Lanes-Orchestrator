@@ -69,7 +69,7 @@ const c = {
     magenta: '\x1b[35m'
 };
 
-// Parse args
+// Parse args - Extended CLI contract
 const parseArgs = () => {
     const args = process.argv.slice(2);
     const options = {
@@ -77,7 +77,18 @@ const parseArgs = () => {
         nonInteractive: false,
         answersJson: null,
         answersFile: null,
-        answersStdin: false
+        answersStdin: false,
+        // New flags for DoD compliance
+        path: null,           // --path <dir> - output directory
+        mode: 'full',         // --mode full|fast - fast = stub outputs
+        kind: null,           // --kind cli|api|web|library|mobile - override detection
+        language: null,       // --language python|node|go|... - override detection
+        auth: null,           // --auth none|email|api-key|oauth - override
+        noAuth: false,        // --no-auth - force auth=none
+        db: null,             // --db none|postgres|sqlite - override
+        noDb: false,          // --no-db - force db=none
+        deploy: null,         // --deploy local|docker|vercel|none - override
+        fast: false           // --fast - alias for --mode fast
     };
 
     // Join all non-flag args as description
@@ -93,6 +104,29 @@ const parseArgs = () => {
             options.answersFile = args[++i];
         } else if (args[i] === '--answers-stdin') {
             options.answersStdin = true;
+        } else if (args[i] === '--path' && args[i + 1]) {
+            options.path = args[++i];
+        } else if (args[i] === '--mode' && args[i + 1]) {
+            options.mode = args[++i];
+        } else if (args[i] === '--fast') {
+            options.fast = true;
+            options.mode = 'fast';
+        } else if (args[i] === '--kind' && args[i + 1]) {
+            options.kind = args[++i];
+        } else if (args[i] === '--language' && args[i + 1]) {
+            options.language = args[++i];
+        } else if (args[i] === '--auth' && args[i + 1]) {
+            options.auth = args[++i];
+        } else if (args[i] === '--no-auth') {
+            options.noAuth = true;
+            options.auth = 'none';
+        } else if (args[i] === '--db' && args[i + 1]) {
+            options.db = args[++i];
+        } else if (args[i] === '--no-db') {
+            options.noDb = true;
+            options.db = 'none';
+        } else if (args[i] === '--deploy' && args[i + 1]) {
+            options.deploy = args[++i];
         } else if (!args[i].startsWith('--')) {
             descParts.push(args[i]);
         }
@@ -215,23 +249,43 @@ const LANGUAGE_PATTERNS = {
 
 /**
  * Detect project type from description
+ * Returns: { type, confidence, signals }
  */
 const detectProjectType = (description) => {
-    if (!description) return PROJECT_TYPES.web;
+    if (!description) {
+        return {
+            type: null,
+            confidence: 0,
+            signals: ['no description provided'],
+            needsConfirmation: true
+        };
+    }
 
     const text = description.toLowerCase();
+    const signals = [];
 
     // Check each project type
     for (const [typeId, typeInfo] of Object.entries(PROJECT_TYPES)) {
         for (const pattern of typeInfo.patterns) {
             if (pattern.test(text)) {
-                return typeInfo;
+                signals.push(`matched pattern: ${pattern.toString()}`);
+                return {
+                    type: typeInfo,
+                    confidence: 0.9,
+                    signals,
+                    needsConfirmation: false
+                };
             }
         }
     }
 
-    // Default to web
-    return PROJECT_TYPES.web;
+    // No match - return null, not web
+    return {
+        type: null,
+        confidence: 0,
+        signals: ['no project type patterns matched'],
+        needsConfirmation: true
+    };
 };
 
 /**
@@ -278,6 +332,100 @@ const detectExplicitNegations = (description) => {
     }
 
     return negations;
+};
+
+// ============================================
+// Step 0: Classifier - Generate 05_classify/classify.json
+// ============================================
+
+/**
+ * Generate classifier output with full schema per DoD
+ * @param {string} description - User's project description
+ * @param {object} options - CLI flags that can override detection
+ * @returns {object} classify.json schema
+ */
+const generateClassify = (description, options = {}) => {
+    const typeResult = detectProjectType(description);
+    const detectedLanguage = detectLanguage(description);
+    const negations = detectExplicitNegations(description);
+
+    // Build signals array
+    const signals = [...(typeResult.signals || [])];
+    if (detectedLanguage) signals.push(`detected language: ${detectedLanguage}`);
+    if (negations.auth) signals.push('explicit: no auth');
+    if (negations.database) signals.push('explicit: no database');
+    if (negations.ui) signals.push('explicit: no ui');
+
+    // Build overrides from CLI flags
+    const overrides = {};
+    if (options.kind) overrides.project_kind = options.kind;
+    if (options.language) overrides.language = options.language;
+    if (options.auth !== undefined && options.auth !== null) overrides.needs_auth = options.auth;
+    if (options.noAuth) overrides.needs_auth = 'none';
+    if (options.db !== undefined && options.db !== null) overrides.needs_db = options.db;
+    if (options.noDb) overrides.needs_db = 'none';
+    if (options.deploy) overrides.deploy = options.deploy;
+
+    // Determine final values (override > detection > safe default)
+    const projectKind = overrides.project_kind || typeResult.type?.id || 'unknown';
+    const language = overrides.language || detectedLanguage || 'unknown';
+
+    // Auth: override > negation > unknown (not default email)
+    let needsAuth = 'unknown';
+    if (overrides.needs_auth !== undefined) {
+        needsAuth = overrides.needs_auth;
+    } else if (negations.auth) {
+        needsAuth = 'none';
+    } else if (typeResult.type?.id === 'cli' || typeResult.type?.id === 'library') {
+        // CLI and library default to no auth
+        needsAuth = 'none';
+    }
+
+    // DB: override > negation > unknown (not default postgres)
+    let needsDb = 'unknown';
+    if (overrides.needs_db !== undefined) {
+        needsDb = overrides.needs_db;
+    } else if (negations.database) {
+        needsDb = 'none';
+    } else if (typeResult.type?.id === 'cli' || typeResult.type?.id === 'library') {
+        // CLI and library default to no db
+        needsDb = 'none';
+    }
+
+    // Deploy: override > type default > local
+    let deploy = 'local';
+    if (overrides.deploy) {
+        deploy = overrides.deploy;
+    } else if (typeResult.type?.defaults?.deploy) {
+        deploy = typeResult.type.defaults.deploy;
+    }
+
+    // Calculate overall confidence
+    let confidence = typeResult.confidence;
+    if (projectKind === 'unknown') confidence = 0;
+    if (language === 'unknown') confidence = Math.min(confidence, 0.5);
+    if (needsAuth === 'unknown') confidence = Math.min(confidence, 0.7);
+    if (needsDb === 'unknown') confidence = Math.min(confidence, 0.7);
+
+    return {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        input: {
+            description: description || '',
+            cli_flags: Object.keys(overrides).length > 0 ? overrides : null
+        },
+        classification: {
+            project_kind: projectKind,
+            language: language,
+            needs_auth: needsAuth,
+            needs_db: needsDb,
+            deploy: deploy
+        },
+        confidence: Math.round(confidence * 100) / 100,
+        signals: signals,
+        overrides: Object.keys(overrides).length > 0 ? overrides : null,
+        needs_confirmation: projectKind === 'unknown' || needsAuth === 'unknown' || needsDb === 'unknown'
+    };
 };
 
 // ============================================
@@ -689,14 +837,16 @@ const generateIntake = (answers, runId) => {
     };
 };
 
-// Generate spec from intake
-const generateSpec = (intake, researchNote) => {
+// Generate spec from intake (with decisions for out_of_scope)
+const generateSpec = (intake, researchNote, decisions = null) => {
     const features = parseFeatures(intake._raw_answers?.features || '');
     const techStack = determineTechStack(intake._raw_answers || {});
     const projectType = intake.project?.type || 'web';
     const language = intake.project?.language || intake.constraints?.language;
     const auth = intake.constraints?.auth || 'none';
     const isAuthRequired = auth !== 'none' && auth !== 'không' && auth !== 'không cần';
+    const needsDb = intake.constraints?.data_sensitivity && intake.constraints.data_sensitivity !== 'none';
+    const outOfScope = decisions?.out_of_scope || [];
 
     // Build spec based on project type
     let spec = `# ${intake.project.name} - Specification
@@ -721,6 +871,9 @@ ${intake.target_users?.primary || 'Developers'}
 
 ### MVP Features
 ${intake.scope?.mvp_features?.length > 0 ? intake.scope.mvp_features.map(f => `- ${f}`).join('\n') : '- See feature list below'}
+
+### Out of Scope
+${outOfScope.length > 0 ? outOfScope.map(s => `- ${s}`).join('\n') : '- None specified'}
 
 ---
 
@@ -833,7 +986,8 @@ ${language ? `- **Language:** ${language}` : ''}
 ${isAuthRequired ? `- **Method:** ${auth}` : ''}
 
 ### Database
-- **Required:** ${intake.constraints?.data_sensitivity !== 'none' ? 'Yes' : 'No'}
+- **Required:** ${needsDb ? 'Yes' : 'No'}
+${!needsDb ? '- *No database/persistence required for this project*' : ''}
 
 ### Tech Stack
 
@@ -875,17 +1029,35 @@ ${researchNote ? `## 6. Research Notes
     return spec;
 };
 
-// Generate task breakdown
-const generateTasks = (intake) => {
+// Generate task breakdown (lane-aware per project type)
+const generateTasks = (intake, classify = null) => {
     const features = parseFeatures(intake._raw_answers?.features || '');
     const tasks = [];
     let taskId = 1;
 
-    // Setup tasks
+    // Get project kind for lane selection
+    const projectKind = classify?.classification?.project_kind || intake.project?.type || 'web';
+    const needsAuth = classify?.classification?.needs_auth !== 'none' &&
+                      intake.constraints?.auth &&
+                      intake.constraints.auth !== 'none' &&
+                      intake.constraints.auth !== 'không' &&
+                      intake.constraints.auth !== 'không cần';
+
+    // Lane mapping per project type
+    const laneMap = {
+        cli: { feature: 'core', deploy: 'packaging' },
+        api: { feature: 'api', deploy: 'devops' },
+        library: { feature: 'core', deploy: 'packaging' },
+        web: { feature: 'ui', deploy: 'devops' },
+        mobile: { feature: 'ui', deploy: 'devops' }
+    };
+    const lanes = laneMap[projectKind] || laneMap.web;
+
+    // Setup task
     tasks.push({
         id: `T${taskId++}`,
         name: 'Project Setup',
-        description: 'Khởi tạo project với tech stack đề xuất',
+        description: `Initialize ${projectKind} project with recommended stack`,
         priority: 'P0',
         lane: 'setup',
         estimated_hours: 2,
@@ -893,12 +1065,12 @@ const generateTasks = (intake) => {
         status: 'pending'
     });
 
-    // Auth task if needed
-    if (intake.constraints?.auth && intake.constraints.auth !== 'không' && intake.constraints.auth !== 'không cần') {
+    // Auth task ONLY if needed (check both classify and intake)
+    if (needsAuth) {
         tasks.push({
             id: `T${taskId++}`,
             name: 'Authentication Setup',
-            description: `Implement đăng nhập bằng ${intake.constraints.auth}`,
+            description: `Implement auth: ${intake.constraints.auth}`,
             priority: 'P0',
             lane: 'api',
             estimated_hours: 4,
@@ -907,43 +1079,67 @@ const generateTasks = (intake) => {
         });
     }
 
-    // Feature tasks
-    features.forEach((f, i) => {
+    // Feature tasks - use appropriate lane
+    if (features.length === 0) {
+        // No features defined - add placeholder
         tasks.push({
             id: `T${taskId++}`,
-            name: f.name,
-            description: `Implement tính năng: ${f.name}`,
-            priority: f.priority,
-            lane: 'ui',
-            estimated_hours: f.priority === 'P0' ? 4 : 2,
-            dependencies: taskId > 3 ? [`T${taskId - 2}`] : ['T1'],
+            name: 'Core Feature Implementation',
+            description: 'Implement main project functionality (see spec)',
+            priority: 'P0',
+            lane: lanes.feature,
+            estimated_hours: 4,
+            dependencies: ['T1'],
             status: 'pending'
         });
-    });
+    } else {
+        features.forEach((f, i) => {
+            tasks.push({
+                id: `T${taskId++}`,
+                name: f.name,
+                description: `Implement: ${f.name}`,
+                priority: f.priority,
+                lane: lanes.feature,
+                estimated_hours: f.priority === 'P0' ? 4 : 2,
+                dependencies: i === 0 ? ['T1'] : [`T${taskId - 2}`],
+                status: 'pending'
+            });
+        });
+    }
 
     // Testing task
     tasks.push({
         id: `T${taskId++}`,
         name: 'Testing & QA',
-        description: 'Test tất cả tính năng, fix bugs',
+        description: 'Test all features, fix bugs',
         priority: 'P0',
         lane: 'qa',
         estimated_hours: 4,
-        dependencies: tasks.filter(t => t.priority === 'P0').map(t => t.id),
+        dependencies: tasks.filter(t => t.priority === 'P0' && t.lane !== 'qa').map(t => t.id),
         status: 'pending'
     });
 
-    // Deploy task
+    // Deploy/Package task - per project type
+    const deployName = projectKind === 'library' ? 'Publish Package' :
+                       projectKind === 'cli' ? 'Package CLI' : 'Deploy MVP';
+    const deployDesc = projectKind === 'library' ? 'Publish to package registry' :
+                       projectKind === 'cli' ? 'Package for distribution' : 'Deploy to production';
+
     tasks.push({
         id: `T${taskId++}`,
-        name: 'Deploy MVP',
-        description: 'Deploy lên production',
+        name: deployName,
+        description: deployDesc,
         priority: 'P0',
-        lane: 'devops',
+        lane: lanes.deploy,
         estimated_hours: 2,
         dependencies: [`T${taskId - 2}`],
         status: 'pending'
     });
+
+    // Determine lanes based on project type
+    const allLanes = projectKind === 'cli' || projectKind === 'library'
+        ? ['setup', 'core', 'qa', 'packaging']
+        : ['setup', 'api', 'ui', 'qa', 'devops', 'security'];
 
     return {
         version: '1.0',
@@ -952,7 +1148,7 @@ const generateTasks = (intake) => {
         total_tasks: tasks.length,
         estimated_total_hours: tasks.reduce((sum, t) => sum + t.estimated_hours, 0),
         tasks,
-        lanes: ['setup', 'api', 'ui', 'qa', 'devops', 'security']
+        lanes: allLanes
     };
 };
 
@@ -1059,57 +1255,128 @@ ${tasks.length > 0 ? tasks.map((t, i) => `${i + 1}. **${t.name}** (${t.priority}
 `;
 };
 
-// Generate Deploy Kit (Layer C)
-const generateDeployKit = (intake) => {
+// Generate Deploy Kit (Layer C) - Conditional based on project type and db setting
+const generateDeployKit = (intake, classify = null) => {
     const projectName = generateSlug(intake._raw_answers).replace(/-/g, '_');
-    const deployTarget = intake.constraints?.deploy || 'Docker';
-    const platform = intake.constraints?.platform || 'web';
-    const hasAuth = intake.constraints?.auth && intake.constraints.auth !== 'không';
+    const projectKind = classify?.classification?.project_kind || intake.project?.type || 'web';
+    const language = classify?.classification?.language || intake.project?.language || 'node';
+    const deployTarget = classify?.classification?.deploy || intake.constraints?.deploy || 'Docker';
+    const needsAuth = classify?.classification?.needs_auth !== 'none' &&
+                      intake.constraints?.auth &&
+                      intake.constraints.auth !== 'none' &&
+                      intake.constraints.auth !== 'không';
+    const needsDb = classify?.classification?.needs_db !== 'none' &&
+                    intake.constraints?.data_sensitivity &&
+                    intake.constraints.data_sensitivity !== 'none';
 
-    const dockerfile = `# Dockerfile for ${intake.project.name}
-FROM node:20-alpine AS builder
+    let dockerfile = null;
+    let dockerCompose = null;
+    let envExample = '';
+    let deployMd = '';
+
+    // CLI projects - no Docker, package-based deployment
+    if (projectKind === 'cli') {
+        if (language === 'python') {
+            envExample = `# No environment variables needed for CLI tool
+# If your CLI needs config, use ~/.config/${projectName}/config.json
+`;
+            deployMd = `# Deploy Guide - ${intake.project.name} (Python CLI)
+
+## Installation
+
+### From PyPI (when published)
+\`\`\`bash
+pip install ${projectName.replace(/_/g, '-')}
+\`\`\`
+
+### From source
+\`\`\`bash
+git clone <your-repo-url>
+cd ${generateSlug(intake._raw_answers)}
+pip install -e .
+\`\`\`
+
+## Usage
+\`\`\`bash
+${projectName.replace(/_/g, '-')} --help
+\`\`\`
+
+## Publishing to PyPI
+\`\`\`bash
+pip install build twine
+python -m build
+twine upload dist/*
+\`\`\`
+
+---
+*Generated by AI Agent Toolkit*
+`;
+        } else {
+            envExample = `# No environment variables needed for CLI tool
+`;
+            deployMd = `# Deploy Guide - ${intake.project.name} (CLI)
+
+## Installation
+\`\`\`bash
+npm install -g ${projectName.replace(/_/g, '-')}
+\`\`\`
+
+## Usage
+\`\`\`bash
+${projectName.replace(/_/g, '-')} --help
+\`\`\`
+
+---
+*Generated by AI Agent Toolkit*
+`;
+        }
+    }
+    // API projects
+    else if (projectKind === 'api') {
+        if (language === 'python') {
+            dockerfile = `# Dockerfile for ${intake.project.name} (Python API)
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+`;
+        } else {
+            dockerfile = `# Dockerfile for ${intake.project.name} (Node API)
+FROM node:20-alpine
+
+WORKDIR /app
+
 COPY package*.json ./
 RUN npm ci --only=production
 
-# Copy source
 COPY . .
-
-# Build
-RUN npm run build
-
-# Production image
-FROM node:20-alpine AS runner
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Copy built assets
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
 `;
+        }
 
-    const dockerCompose = `version: '3.8'
+        // Only add db service if needed
+        if (needsDb) {
+            dockerCompose = `version: '3.8'
 
 services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "${language === 'python' ? '8000:8000' : '3000:3000'}"
     environment:
-      - NODE_ENV=production
       - DATABASE_URL=\${DATABASE_URL}
-${hasAuth ? '      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}\n      - NEXTAUTH_URL=${NEXTAUTH_URL}' : ''}
+${needsAuth ? '      - API_SECRET_KEY=${API_SECRET_KEY}' : ''}
     depends_on:
       - db
     restart: unless-stopped
@@ -1127,123 +1394,194 @@ ${hasAuth ? '      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}\n      - NEXTAUTH_URL=${
 volumes:
   postgres_data:
 `;
-
-    const envExample = `# Database
+            envExample = `# Database
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${projectName}
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=${projectName}
 
-${hasAuth ? `# Authentication
+${needsAuth ? '# Authentication\nAPI_SECRET_KEY=your-secret-key-here\n' : ''}
+# App Config
+PORT=${language === 'python' ? '8000' : '3000'}
+`;
+        } else {
+            // No DB - simpler compose
+            dockerCompose = `version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "${language === 'python' ? '8000:8000' : '3000:3000'}"
+    environment:
+      - PORT=${language === 'python' ? '8000' : '3000'}
+${needsAuth ? '      - API_SECRET_KEY=${API_SECRET_KEY}' : ''}
+    restart: unless-stopped
+`;
+            envExample = `# App Config
+PORT=${language === 'python' ? '8000' : '3000'}
+${needsAuth ? '\n# Authentication\nAPI_SECRET_KEY=your-secret-key-here\n' : ''}
+`;
+        }
+
+        deployMd = `# Deploy Guide - ${intake.project.name} (API)
+
+## Local Development
+\`\`\`bash
+${language === 'python' ? 'pip install -r requirements.txt\nuvicorn main:app --reload' : 'npm install\nnpm run dev'}
+\`\`\`
+
+## Docker
+\`\`\`bash
+docker-compose up -d --build
+\`\`\`
+
+## API Endpoints
+- Health check: GET /health
+- See spec.md for full API documentation
+
+---
+*Generated by AI Agent Toolkit*
+`;
+    }
+    // Web projects
+    else if (projectKind === 'web' || projectKind === 'mobile') {
+        dockerfile = `# Dockerfile for ${intake.project.name}
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+`;
+
+        if (needsDb) {
+            dockerCompose = `version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=\${DATABASE_URL}
+${needsAuth ? '      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}\n      - NEXTAUTH_URL=${NEXTAUTH_URL}' : ''}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=\${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=\${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=\${DB_NAME:-${projectName}}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+`;
+            envExample = `# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${projectName}
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=${projectName}
+
+${needsAuth ? `# Authentication
 NEXTAUTH_SECRET=your-secret-key-here-min-32-chars
 NEXTAUTH_URL=http://localhost:3000
 ` : ''}
-# API Keys (optional)
-# BRAVE_API_KEY=
-# GITHUB_TOKEN=
-
 # App Config
 NODE_ENV=development
 PORT=3000
 `;
+        } else {
+            // No DB
+            dockerCompose = `version: '3.8'
 
-    const deployMd = `# Deploy Guide - ${intake.project.name}
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+${needsAuth ? '      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}\n      - NEXTAUTH_URL=${NEXTAUTH_URL}' : ''}
+    restart: unless-stopped
+`;
+            envExample = `${needsAuth ? `# Authentication
+NEXTAUTH_SECRET=your-secret-key-here-min-32-chars
+NEXTAUTH_URL=http://localhost:3000
+` : ''}# App Config
+NODE_ENV=development
+PORT=3000
+`;
+        }
 
-## Quick Start (Docker)
+        deployMd = `# Deploy Guide - ${intake.project.name}
 
-### 1. Prerequisites
-- Docker & Docker Compose installed
-- Git
-
-### 2. Clone & Configure
-
+## Local Development
 \`\`\`bash
-git clone <your-repo-url>
-cd ${generateSlug(intake._raw_answers)}
-
-# Copy environment file
-cp env.example .env
-
-# Edit .env with your values
-nano .env
+npm install
+npm run dev
 \`\`\`
 
-### 3. Build & Run
-
+## Docker
 \`\`\`bash
-# Build and start
 docker-compose up -d --build
-
-# Check logs
-docker-compose logs -f app
-
-# App will be available at http://localhost:3000
 \`\`\`
 
-### 4. Database Migration
-
-\`\`\`bash
-# Run migrations
-docker-compose exec app npx prisma migrate deploy
-
-# Seed data (if available)
-docker-compose exec app npx prisma db seed
-\`\`\`
-
----
-
-## Production Deploy
-
-### Option A: VPS (DigitalOcean, Linode, etc.)
-
-1. SSH into server
-2. Install Docker & Docker Compose
-3. Clone repo
-4. Configure .env with production values
-5. Run \`docker-compose -f docker-compose.prod.yml up -d\`
-6. Setup reverse proxy (nginx/Caddy)
-7. Configure SSL (Let's Encrypt)
-
-### Option B: Vercel (Recommended for Next.js)
-
+## Vercel (Recommended)
 1. Push to GitHub
-2. Connect repo to Vercel
-3. Configure environment variables in Vercel dashboard
+2. Connect to Vercel
+3. Configure environment variables
 4. Deploy
 
 ---
+*Generated by AI Agent Toolkit*
+`;
+    }
+    // Library projects - no deploy kit
+    else {
+        envExample = `# No environment variables needed for library
+`;
+        deployMd = `# Publish Guide - ${intake.project.name} (Library)
 
-## Monitoring
-
+## npm
 \`\`\`bash
-# View logs
-docker-compose logs -f
-
-# Check status
-docker-compose ps
-
-# Restart
-docker-compose restart
-
-# Stop
-docker-compose down
+npm publish
 \`\`\`
 
-## Backup
-
+## PyPI
 \`\`\`bash
-# Backup database
-docker-compose exec db pg_dump -U postgres ${projectName} > backup.sql
-
-# Restore
-docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
+python -m build
+twine upload dist/*
 \`\`\`
 
 ---
-
 *Generated by AI Agent Toolkit*
-*Run ID: ${intake.run_id}*
 `;
+    }
 
     return {
         dockerfile,
@@ -1253,75 +1591,356 @@ docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
     };
 };
 
-// Generate NEXT_STEPS.md (For users already in IDE - no run_id, use "latest")
-const generateNextSteps = (intake, tasks) => {
+// ============================================
+// Step: Decisions - Generate 30_decisions/decisions.json
+// ============================================
+
+/**
+ * Synthesize decisions from classify + intake + research
+ */
+const generateDecisions = (classify, intake, research) => {
+    const projectKind = classify.classification.project_kind;
+    const language = classify.classification.language;
+    const needsAuth = classify.classification.needs_auth;
+    const needsDb = classify.classification.needs_db;
+    const deploy = classify.classification.deploy;
+
+    // Build tech stack decisions
+    const techDecisions = [];
+
+    // Language decision
+    if (language !== 'unknown') {
+        techDecisions.push({
+            category: 'language',
+            choice: language,
+            rationale: `Detected from description`,
+            alternatives_considered: [],
+            risks: []
+        });
+    }
+
+    // Framework decision based on project kind
+    const frameworkMap = {
+        cli: { python: 'argparse/click', node: 'commander', go: 'cobra', rust: 'clap', dotnet: 'System.CommandLine' },
+        api: { python: 'FastAPI', node: 'Express/Fastify', go: 'gin/chi', rust: 'actix-web', dotnet: 'ASP.NET Core' },
+        web: { node: 'Next.js', python: 'Django/FastAPI' },
+        library: { python: 'setuptools', node: 'tsup/esbuild' },
+        mobile: { node: 'React Native', dart: 'Flutter' }
+    };
+
+    const framework = frameworkMap[projectKind]?.[language] || 'TBD';
+    techDecisions.push({
+        category: 'framework',
+        choice: framework,
+        rationale: `Standard for ${projectKind} in ${language}`,
+        alternatives_considered: [],
+        risks: []
+    });
+
+    // Auth decision
+    if (needsAuth !== 'none' && needsAuth !== 'unknown') {
+        techDecisions.push({
+            category: 'authentication',
+            choice: needsAuth,
+            rationale: 'Per user requirement',
+            alternatives_considered: ['none', 'api-key', 'oauth'],
+            risks: ['Session management complexity']
+        });
+    }
+
+    // Database decision
+    if (needsDb !== 'none' && needsDb !== 'unknown') {
+        techDecisions.push({
+            category: 'database',
+            choice: needsDb === 'yes' ? 'PostgreSQL' : needsDb,
+            rationale: 'Per user requirement',
+            alternatives_considered: ['SQLite', 'MongoDB'],
+            risks: ['Migration management']
+        });
+    }
+
+    // Build out of scope list
+    const outOfScope = [];
+    if (needsAuth === 'none') outOfScope.push('User authentication');
+    if (needsDb === 'none') outOfScope.push('Database/data persistence');
+    if (projectKind === 'cli' || projectKind === 'api') outOfScope.push('Frontend UI');
+    if (projectKind === 'library') outOfScope.push('Deployment infrastructure');
+
+    // Build unknowns/risks
+    const unknowns = [];
+    if (classify.confidence < 0.7) {
+        unknowns.push('Project type classification confidence is low');
+    }
+    if (needsAuth === 'unknown') {
+        unknowns.push('Authentication requirement unclear - defaulting to none');
+    }
+    if (needsDb === 'unknown') {
+        unknowns.push('Database requirement unclear - defaulting to none');
+    }
+
+    // Research-based decisions
+    const referencePatterns = [];
+    if (research.success && research.repos) {
+        research.repos.forEach(repo => {
+            referencePatterns.push({
+                repo: repo.name,
+                pattern_to_reuse: repo.description || 'General architecture',
+                why_relevant: `${repo.stars} stars, similar ${projectKind} project`
+            });
+        });
+    }
+
+    return {
+        version: '1.0',
+        run_id: intake.run_id,
+        timestamp: new Date().toISOString(),
+        summary: {
+            project_kind: projectKind,
+            language: language,
+            auth: needsAuth === 'none' ? 'Not required' : needsAuth,
+            database: needsDb === 'none' ? 'Not required' : needsDb,
+            deploy: deploy
+        },
+        tech_decisions: techDecisions,
+        out_of_scope: outOfScope,
+        unknowns: unknowns,
+        reference_patterns: referencePatterns,
+        rationale: `This is a ${projectKind} project in ${language}. ${needsAuth === 'none' ? 'No authentication required.' : ''} ${needsDb === 'none' ? 'No database required.' : ''}`
+    };
+};
+
+// ============================================
+// Step: Verification Gate - Generate verification.report.json
+// ============================================
+
+/**
+ * Cross-check and validate all artifacts
+ */
+const generateVerificationReport = (classify, intake, decisions, tasks) => {
+    const checks = [];
+    const errors = [];
+    const warnings = [];
+
+    // Check 1: Project kind consistency
+    const classifyKind = classify.classification.project_kind;
+    const intakeKind = intake.project?.type;
+    if (classifyKind !== intakeKind) {
+        warnings.push(`Project kind mismatch: classify=${classifyKind}, intake=${intakeKind}`);
+    }
+    checks.push({
+        name: 'project_kind_consistency',
+        status: classifyKind === intakeKind ? 'pass' : 'warn',
+        detail: `classify: ${classifyKind}, intake: ${intakeKind}`
+    });
+
+    // Check 2: Auth consistency
+    const classifyAuth = classify.classification.needs_auth;
+    const intakeAuth = intake.constraints?.auth;
+    const authMatch = (classifyAuth === 'none' && (!intakeAuth || intakeAuth === 'none')) ||
+                      (classifyAuth !== 'none' && intakeAuth && intakeAuth !== 'none');
+    if (!authMatch && classifyAuth !== 'unknown') {
+        warnings.push(`Auth mismatch: classify=${classifyAuth}, intake=${intakeAuth}`);
+    }
+    checks.push({
+        name: 'auth_consistency',
+        status: authMatch ? 'pass' : 'warn',
+        detail: `classify: ${classifyAuth}, intake: ${intakeAuth || 'none'}`
+    });
+
+    // Check 3: DB consistency
+    const classifyDb = classify.classification.needs_db;
+    const intakeDataSens = intake.constraints?.data_sensitivity;
+    const dbExpected = classifyDb !== 'none' && classifyDb !== 'unknown';
+    const dbInIntake = intakeDataSens && intakeDataSens !== 'none';
+    checks.push({
+        name: 'db_consistency',
+        status: (dbExpected === dbInIntake) ? 'pass' : 'warn',
+        detail: `classify needs_db: ${classifyDb}, intake data_sensitivity: ${intakeDataSens || 'none'}`
+    });
+
+    // Check 4: MVP features not empty
+    const mvpFeatures = intake.scope?.mvp_features || [];
+    if (mvpFeatures.length === 0) {
+        errors.push('MVP features list is empty - implementation will have no clear targets');
+    }
+    checks.push({
+        name: 'mvp_features_defined',
+        status: mvpFeatures.length > 0 ? 'pass' : 'fail',
+        detail: `${mvpFeatures.length} MVP feature(s) defined`
+    });
+
+    // Check 5: Tasks exist
+    const taskCount = tasks?.total_tasks || 0;
+    if (taskCount === 0) {
+        errors.push('No tasks generated');
+    }
+    checks.push({
+        name: 'tasks_generated',
+        status: taskCount > 0 ? 'pass' : 'fail',
+        detail: `${taskCount} task(s) generated`
+    });
+
+    // Check 6: Decisions out_of_scope matches classify
+    if (classifyAuth === 'none' && !decisions.out_of_scope?.includes('User authentication')) {
+        warnings.push('Auth=none but not in out_of_scope');
+    }
+    checks.push({
+        name: 'out_of_scope_complete',
+        status: decisions.out_of_scope?.length > 0 ? 'pass' : 'warn',
+        detail: `${decisions.out_of_scope?.length || 0} item(s) marked out of scope`
+    });
+
+    // Overall status
+    const hasErrors = errors.length > 0;
+    const hasWarnings = warnings.length > 0;
+    const overallStatus = hasErrors ? 'fail' : (hasWarnings ? 'warn' : 'pass');
+
+    return {
+        version: '1.0',
+        run_id: intake.run_id,
+        timestamp: new Date().toISOString(),
+        overall_status: overallStatus,
+        checks: checks,
+        errors: errors,
+        warnings: warnings,
+        summary: {
+            total_checks: checks.length,
+            passed: checks.filter(c => c.status === 'pass').length,
+            warnings: checks.filter(c => c.status === 'warn').length,
+            failed: checks.filter(c => c.status === 'fail').length
+        },
+        recommendation: hasErrors
+            ? 'Fix errors before proceeding to implementation'
+            : hasWarnings
+                ? 'Review warnings - may indicate spec issues'
+                : 'Ready for implementation'
+    };
+};
+
+// Generate NEXT_STEPS.md (per-kind run commands)
+const generateNextSteps = (intake, tasks, classify = null) => {
     const totalHours = tasks.estimated_total_hours;
     const projectName = intake.project.name;
     const taskCount = tasks.total_tasks;
+    const projectKind = classify?.classification?.project_kind || intake.project?.type || 'web';
+    const language = classify?.classification?.language || intake.project?.language || 'node';
 
-    return `# ${projectName} - Bước Tiếp Theo
+    // Per-kind run commands
+    const runCommands = {
+        cli: {
+            python: `python -m ${projectName.toLowerCase().replace(/\\s+/g, '_')} --help`,
+            node: `node index.js --help`,
+            default: `./bin/${projectName.toLowerCase().replace(/\\s+/g, '-')} --help`
+        },
+        api: {
+            python: `uvicorn main:app --reload`,
+            node: `npm run dev`,
+            default: `npm run dev`
+        },
+        library: {
+            python: `pytest`,
+            node: `npm test`,
+            default: `npm test`
+        },
+        web: {
+            default: `npm run dev`
+        },
+        mobile: {
+            default: `npx expo start`
+        }
+    };
 
-## ✅ Hoàn thành! Đã tạo xong bản thiết kế.
+    const runCmd = runCommands[projectKind]?.[language] || runCommands[projectKind]?.default || 'npm run dev';
 
-Bây giờ bạn có thể bắt đầu code ngay trong IDE này.
+    // Per-kind verify success
+    const verifyInstructions = {
+        cli: `- Run \`${runCmd}\` and check help output`,
+        api: `- Run \`curl http://localhost:8000/health\` - should return OK`,
+        library: `- Run \`${runCmd}\` - all tests should pass`,
+        web: `- Open http://localhost:3000 - should see homepage`,
+        mobile: `- Scan QR code with Expo Go app`
+    };
+
+    const verify = verifyInstructions[projectKind] || verifyInstructions.web;
+
+    return `# ${projectName} - Next Steps
+
+## ✅ Specification complete!
+
+**Project Type:** ${projectKind}
+**Language:** ${language}
 
 ---
 
-## 🚀 Cách làm (Ngay trong IDE)
+## 🚀 Getting Started
 
-### Bước 1: Yêu cầu AI tạo code
+### Step 1: Ask AI to implement
 
-Gõ vào chat của IDE (Claude Code, Cursor, Windsurf...):
+Tell your IDE AI:
 
-> Đọc file artifacts/runs/latest/40_spec/spec.md và bắt đầu implement
+> Read file artifacts/runs/latest/40_spec/spec.md and implement the project
 
-### Bước 2: Theo dõi tiến độ
+### Step 2: Run locally
 
-AI sẽ tự động:
-- Tạo project structure
-- Implement từng tính năng trong spec
-- Chạy test và fix lỗi
+\`\`\`bash
+${projectKind === 'cli' && language === 'python' ? 'pip install -e .' :
+  projectKind === 'api' && language === 'python' ? 'pip install -r requirements.txt' :
+  'npm install'}
 
-Bạn chỉ cần xem và confirm khi AI hỏi.
+${runCmd}
+\`\`\`
 
-### Bước 3: Chạy thử
-
-Khi AI báo xong, gõ:
-
-> Chạy app để test thử
+### Step 3: Verify success
+${verify}
 
 ---
 
-## 📋 Danh sách công việc (${taskCount} tasks)
+## 📋 Tasks (${taskCount} total)
 
 ${tasks.tasks.slice(0, 7).map((t, i) => `${i + 1}. ${t.name}`).join('\n')}
-${tasks.tasks.length > 7 ? `\n_(và ${tasks.tasks.length - 7} tasks khác)_` : ''}
+${tasks.tasks.length > 7 ? `\n_(and ${tasks.tasks.length - 7} more)_` : ''}
 
 ---
 
-## 📁 Đường dẫn kết quả
+## 📁 Artifacts
 
 \`\`\`
 artifacts/runs/latest/
-├── 40_spec/spec.md          ← Đặc tả (gửi cho AI)
-├── 40_spec/NEXT_STEPS.md    ← File này
-├── deploy/                   ← Docker files
-└── ...
+├── 05_classify/classify.json    ← Project classification
+├── 10_intake/intake.json        ← Requirements
+├── 20_research/                  ← Reference repos
+├── 30_decisions/decisions.json  ← Tech decisions
+├── 40_spec/spec.md              ← Specification (main)
+├── 40_spec/task_breakdown.json  ← Task list
+├── 60_verification/             ← Security review
+├── deploy/                      ← Deploy kit
+├── run_summary.md               ← Summary
+└── run.log                      ← Execution log
 \`\`\`
 
 ---
 
-## ❓ Gặp vấn đề?
+## ❓ Troubleshooting
 
-**AI làm sai?** → Nói: "Đọc lại spec.md phần [tên tính năng]"
+**Missing dependencies?**
+${projectKind === 'cli' && language === 'python' ? '→ `pip install -e .`' :
+  projectKind === 'api' && language === 'python' ? '→ `pip install -r requirements.txt`' :
+  '→ `npm install`'}
 
-**Muốn deploy?** → Gõ: \`npx aat deploy\` hoặc xem \`artifacts/runs/latest/deploy/DEPLOY.md\`
+**Tests failing?**
+→ Check spec.md acceptance criteria
 
-**Muốn chạy QA?** → Gõ: \`npx aat qa\`
+**Deploy issues?**
+→ See \`artifacts/runs/latest/deploy/DEPLOY.md\`
+
+**Run QA check:**
+\`\`\`bash
+npx aat qa
+\`\`\`
 
 ---
 
-*${projectName} | ${taskCount} tasks | ~${totalHours}h*
+*${projectName} | ${projectKind} | ${language} | ${taskCount} tasks*
 `;
 };
 
@@ -1428,13 +2047,34 @@ const tryResearch = async (intake) => {
 // Main vibe function
 const runVibe = async () => {
     const options = parseArgs();
+    const runLog = [];
+    const log = (msg) => { runLog.push(`[${new Date().toISOString()}] ${msg}`); };
 
     console.log(`\n${c.magenta}${c.bold}╔══════════════════════════════════════════════════════════════╗${c.reset}`);
     console.log(`${c.magenta}${c.bold}║            🎨 VIBE MODE - AI Agent Toolkit                   ║${c.reset}`);
     console.log(`${c.magenta}${c.bold}╚══════════════════════════════════════════════════════════════╝${c.reset}`);
     console.log(`\n${c.dim}Mô tả dự án → Nhận spec + tasks + security + deploy kit${c.reset}\n`);
 
+    log('Vibe mode started');
+
+    // Step 0: Classifier (before collecting answers)
+    console.log(`${c.yellow}[0/9]${c.reset} Classifying project...`);
+    const classify = generateClassify(options.description, options);
+    log(`Classifier: kind=${classify.classification.project_kind}, lang=${classify.classification.language}, conf=${classify.confidence}`);
+
+    // Display classification results
+    console.log(`  ${c.cyan}Kind:${c.reset} ${classify.classification.project_kind}`);
+    console.log(`  ${c.cyan}Language:${c.reset} ${classify.classification.language}`);
+    console.log(`  ${c.cyan}Auth:${c.reset} ${classify.classification.needs_auth}`);
+    console.log(`  ${c.cyan}DB:${c.reset} ${classify.classification.needs_db}`);
+    console.log(`  ${c.cyan}Confidence:${c.reset} ${Math.round(classify.confidence * 100)}%`);
+    if (classify.needs_confirmation) {
+        console.log(`  ${c.yellow}⚠ Some fields need confirmation${c.reset}`);
+    }
+    console.log();
+
     // Step 1: Collect answers (interactive or non-interactive)
+    // Pass classify results to inform question selection
     let answers;
     if (options.nonInteractive) {
         console.log(`${c.dim}[Non-interactive mode]${c.reset}\n`);
@@ -1442,6 +2082,22 @@ const runVibe = async () => {
     } else {
         answers = await collectAnswers(options.description);
     }
+
+    // Apply classifier overrides to answers
+    if (classify.classification.project_kind !== 'unknown') {
+        answers._projectType = classify.classification.project_kind;
+    }
+    if (classify.classification.language !== 'unknown') {
+        answers._detectedLanguage = classify.classification.language;
+    }
+    if (classify.classification.needs_auth === 'none') {
+        answers.auth = 'none';
+    }
+    if (classify.classification.needs_db === 'none') {
+        answers.data_sensitivity = 'none';
+    }
+
+    log(`Answers collected: ${JSON.stringify(Object.keys(answers))}`);
 
     // Validate required fields
     if (!answers.goal && !answers.features) {
@@ -1453,7 +2109,7 @@ const runVibe = async () => {
         process.exit(1);
     }
 
-    // Step 2: Generate run ID
+    // Step 2: Generate run ID and create directory structure
     const slug = generateSlug(answers);
     const runId = options.runId || utils.generateRunId?.(slug) || (() => {
         const now = new Date();
@@ -1462,89 +2118,203 @@ const runVibe = async () => {
         return `${d}_${t}_${slug}`;
     })();
 
-    // Step 2b: Create run directory immediately
-    const runDir = path.join(REPO_ROOT, 'artifacts', 'runs', runId);
-    if (!fs.existsSync(runDir)) {
-        fs.mkdirSync(runDir, { recursive: true });
-    }
+    log(`Run ID: ${runId}`);
+
+    // Create all required directories
+    const runDir = options.path || path.join(REPO_ROOT, 'artifacts', 'runs', runId);
+    const dirs = [
+        runDir,
+        path.join(runDir, '00_user_request'),
+        path.join(runDir, '05_classify'),
+        path.join(runDir, '10_intake'),
+        path.join(runDir, '20_research'),
+        path.join(runDir, '30_decisions'),
+        path.join(runDir, '40_spec'),
+        path.join(runDir, '60_verification'),
+        path.join(runDir, 'deploy')
+    ];
+    dirs.forEach(dir => {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    });
 
     // Save initial user request
     const userRequestContent = `# User Request\n\n**Description:** ${options.description || '(interactive)'}\n\n**Answers:**\n${JSON.stringify(answers, null, 2)}\n`;
-    fs.writeFileSync(path.join(runDir, '00_user_request.md'), userRequestContent);
+    fs.writeFileSync(path.join(runDir, '00_user_request', 'request.md'), userRequestContent);
 
     console.log(`\n${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
     console.log(`${c.cyan}   Đang xử lý... Run ID: ${runId}${c.reset}`);
     console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
+    // Step 0b: Save classify.json
+    console.log(`${c.yellow}[1/9]${c.reset} Saving classification...`);
+    classify.run_id = runId;
+    fs.writeFileSync(path.join(runDir, '05_classify', 'classify.json'), JSON.stringify(classify, null, 2));
+    console.log(`  ${c.green}✓${c.reset} Saved: 05_classify/classify.json\n`);
+    log('Classify saved');
+
     // Step 3: Generate intake
-    console.log(`${c.yellow}[1/7]${c.reset} Thu thập yêu cầu...`);
+    console.log(`${c.yellow}[2/9]${c.reset} Thu thập yêu cầu...`);
     const intake = generateIntake(answers, runId);
-    const intakePath = utils.writeArtifact(runId, 'intake', 'intake.json', intake);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${intakePath}\n`);
+    // Sync intake with classify decisions
+    intake.constraints.auth = classify.classification.needs_auth === 'none' ? 'none' : intake.constraints.auth;
+    intake.constraints.data_sensitivity = classify.classification.needs_db === 'none' ? 'none' : intake.constraints.data_sensitivity;
+    fs.writeFileSync(path.join(runDir, '10_intake', 'intake.json'), JSON.stringify(intake, null, 2));
+    console.log(`  ${c.green}✓${c.reset} Saved: 10_intake/intake.json\n`);
+    log('Intake saved');
 
     // Step 4: Try research (best effort)
-    console.log(`${c.yellow}[2/7]${c.reset} Nghiên cứu giải pháp...`);
+    console.log(`${c.yellow}[3/9]${c.reset} Nghiên cứu giải pháp...`);
     const research = await tryResearch(intake);
+    const researchResult = {
+        run_id: runId,
+        timestamp: new Date().toISOString(),
+        query: research.query || null,
+        status: research.success ? 'ok' : 'degraded',
+        repos: research.success ? research.repos.map(r => ({
+            name: r.name,
+            url: r.url,
+            stars: r.stars,
+            description: r.description,
+            why_relevant: `${classify.classification.project_kind} project with ${r.stars} stars`,
+            pattern_to_reuse: r.description || 'General architecture',
+            relevance_score: Math.min(1, r.stars / 10000)
+        })) : [],
+        note: research.note
+    };
+    fs.writeFileSync(path.join(runDir, '20_research', 'research.shortlist.json'), JSON.stringify(researchResult, null, 2));
     if (research.success) {
-        utils.writeArtifact(runId, 'research', 'research.shortlist.json', {
-            run_id: runId,
-            repos: research.repos,
-            note: research.note
-        });
         console.log(`  ${c.green}✓${c.reset} ${research.note}\n`);
     } else {
-        console.log(`  ${c.yellow}⚠${c.reset} ${research.note}\n`);
+        console.log(`  ${c.yellow}⚠${c.reset} ${research.note} (status: degraded)\n`);
     }
+    log(`Research: ${research.note}`);
 
-    // Step 5: Generate spec
-    console.log(`${c.yellow}[3/7]${c.reset} Tạo specification...`);
+    // Step 5: Generate decisions
+    console.log(`${c.yellow}[4/9]${c.reset} Synthesizing decisions...`);
+    const decisions = generateDecisions(classify, intake, research);
+    fs.writeFileSync(path.join(runDir, '30_decisions', 'decisions.json'), JSON.stringify(decisions, null, 2));
+    console.log(`  ${c.green}✓${c.reset} Saved: 30_decisions/decisions.json`);
+    console.log(`  ${c.dim}Out of scope: ${decisions.out_of_scope.join(', ') || 'none'}${c.reset}\n`);
+    log(`Decisions: out_of_scope=${decisions.out_of_scope.length}`);
+
+    // Step 6: Generate spec (with out_of_scope from decisions)
+    console.log(`${c.yellow}[5/9]${c.reset} Tạo specification...`);
     const researchNote = research.success
         ? `Repos tham khảo: ${research.repos.map(r => r.name).join(', ')}`
         : research.note;
-    const spec = generateSpec(intake, researchNote);
-    const specPath = utils.writeArtifact(runId, 'spec', 'spec.md', spec);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${specPath}\n`);
+    // Pass decisions to spec for out_of_scope
+    const spec = generateSpec(intake, researchNote, decisions);
+    fs.writeFileSync(path.join(runDir, '40_spec', 'spec.md'), spec);
+    console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/spec.md\n`);
+    log('Spec saved');
 
-    // Step 6: Generate tasks
-    console.log(`${c.yellow}[4/7]${c.reset} Chia nhỏ công việc...`);
-    const tasks = generateTasks(intake);
-    const tasksPath = utils.writeArtifact(runId, 'spec', 'task_breakdown.json', tasks);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${tasksPath}\n`);
+    // Step 7: Generate tasks (lane-aware)
+    console.log(`${c.yellow}[6/9]${c.reset} Chia nhỏ công việc...`);
+    const tasks = generateTasks(intake, classify);
+    fs.writeFileSync(path.join(runDir, '40_spec', 'task_breakdown.json'), JSON.stringify(tasks, null, 2));
+    console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/task_breakdown.json (${tasks.total_tasks} tasks)\n`);
+    log(`Tasks: ${tasks.total_tasks}`);
 
-    // Step 7: Security Review (Layer C)
-    console.log(`${c.yellow}[5/7]${c.reset} Security review...`);
+    // Step 8: Security Review + Verification Report
+    console.log(`${c.yellow}[7/9]${c.reset} Security review & verification...`);
     const securityReview = generateSecurityReview(intake);
-    const securityPath = utils.writeArtifact(runId, 'verification', 'security_review.md', securityReview);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${securityPath}\n`);
+    fs.writeFileSync(path.join(runDir, '60_verification', 'security_review.md'), securityReview);
 
-    // Step 8: Deploy Kit (Layer C)
-    console.log(`${c.yellow}[6/7]${c.reset} Tạo deploy kit...`);
-    const deployKit = generateDeployKit(intake);
+    const verificationReport = generateVerificationReport(classify, intake, decisions, tasks);
+    fs.writeFileSync(path.join(runDir, '60_verification', 'verification.report.json'), JSON.stringify(verificationReport, null, 2));
 
-    // Create deploy directory using utils
-    const deployDir = utils.getArtifactPath(runId, 'deploy');
-    if (!fs.existsSync(deployDir)) {
-        fs.mkdirSync(deployDir, { recursive: true });
+    console.log(`  ${c.green}✓${c.reset} Saved: 60_verification/security_review.md`);
+    console.log(`  ${c.green}✓${c.reset} Saved: 60_verification/verification.report.json`);
+    console.log(`  ${c.dim}Status: ${verificationReport.overall_status} (${verificationReport.summary.passed}/${verificationReport.summary.total_checks} checks passed)${c.reset}\n`);
+    log(`Verification: ${verificationReport.overall_status}`);
+
+    // Step 9: Deploy Kit (conditional based on project type and db setting)
+    console.log(`${c.yellow}[8/9]${c.reset} Tạo deploy kit...`);
+    const projectKind = classify.classification.project_kind;
+    const needsDb = classify.classification.needs_db !== 'none';
+    const deployTarget = classify.classification.deploy;
+
+    // Only generate deploy kit for deployable projects
+    if (projectKind === 'library') {
+        console.log(`  ${c.dim}Skipped (library projects use package registry)${c.reset}\n`);
+        fs.writeFileSync(path.join(runDir, 'deploy', 'README.md'), '# Deploy\n\nThis is a library project. Deploy via package registry (npm/pip/nuget).\n');
+    } else if (deployTarget === 'none' || deployTarget === 'local') {
+        console.log(`  ${c.dim}Skipped (deploy=${deployTarget})${c.reset}\n`);
+        fs.writeFileSync(path.join(runDir, 'deploy', 'README.md'), `# Deploy\n\nDeploy target: ${deployTarget}\n\nNo deployment infrastructure generated.\n`);
+    } else {
+        // Generate deploy kit with proper conditionals
+        const deployKit = generateDeployKit(intake, classify);
+        const deployDir = path.join(runDir, 'deploy');
+
+        if (deployKit.dockerfile) {
+            fs.writeFileSync(path.join(deployDir, 'Dockerfile'), deployKit.dockerfile);
+        }
+        if (deployKit.dockerCompose) {
+            fs.writeFileSync(path.join(deployDir, 'docker-compose.yml'), deployKit.dockerCompose);
+        }
+        fs.writeFileSync(path.join(deployDir, 'env.example'), deployKit.envExample);
+        fs.writeFileSync(path.join(deployDir, 'DEPLOY.md'), deployKit.deployMd);
+        console.log(`  ${c.green}✓${c.reset} Saved: deploy/\n`);
     }
+    log('Deploy kit saved');
 
-    fs.writeFileSync(path.join(deployDir, 'Dockerfile'), deployKit.dockerfile);
-    fs.writeFileSync(path.join(deployDir, 'docker-compose.yml'), deployKit.dockerCompose);
-    fs.writeFileSync(path.join(deployDir, 'env.example'), deployKit.envExample);
-    fs.writeFileSync(path.join(deployDir, 'DEPLOY.md'), deployKit.deployMd);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${deployDir}/\n`);
+    // Step 10: Generate NEXT_STEPS (per-kind)
+    console.log(`${c.yellow}[9/9]${c.reset} Tạo hướng dẫn...`);
+    const nextSteps = generateNextSteps(intake, tasks, classify);
+    fs.writeFileSync(path.join(runDir, '40_spec', 'NEXT_STEPS.md'), nextSteps);
+    console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/NEXT_STEPS.md\n`);
 
-    // Step 9: Generate NEXT_STEPS
-    console.log(`${c.yellow}[7/7]${c.reset} Tạo hướng dẫn...`);
-    const nextSteps = generateNextSteps(intake, tasks);
-    const nextStepsPath = utils.writeArtifact(runId, 'spec', 'NEXT_STEPS.md', nextSteps);
-    console.log(`  ${c.green}✓${c.reset} Saved: ${nextStepsPath}\n`);
+    // Save run.log
+    log('Vibe mode completed');
+    fs.writeFileSync(path.join(runDir, 'run.log'), runLog.join('\n'));
+
+    // Generate run_summary.md
+    const runSummary = `# Run Summary
+
+**Run ID:** ${runId}
+**Timestamp:** ${new Date().toISOString()}
+
+## Classification
+- **Project Kind:** ${classify.classification.project_kind}
+- **Language:** ${classify.classification.language}
+- **Auth:** ${classify.classification.needs_auth}
+- **Database:** ${classify.classification.needs_db}
+- **Confidence:** ${Math.round(classify.confidence * 100)}%
+
+## Verification
+- **Status:** ${verificationReport.overall_status}
+- **Checks:** ${verificationReport.summary.passed}/${verificationReport.summary.total_checks} passed
+${verificationReport.errors.length > 0 ? `- **Errors:** ${verificationReport.errors.join(', ')}` : ''}
+${verificationReport.warnings.length > 0 ? `- **Warnings:** ${verificationReport.warnings.join(', ')}` : ''}
+
+## Artifacts Generated
+- 00_user_request/request.md
+- 05_classify/classify.json
+- 10_intake/intake.json
+- 20_research/research.shortlist.json
+- 30_decisions/decisions.json
+- 40_spec/spec.md
+- 40_spec/task_breakdown.json
+- 40_spec/NEXT_STEPS.md
+- 60_verification/security_review.md
+- 60_verification/verification.report.json
+- deploy/
+- run.log
+- run_summary.md
+
+## Next Steps
+${verificationReport.recommendation}
+`;
+    fs.writeFileSync(path.join(runDir, 'run_summary.md'), runSummary);
 
     // Set this as latest run
     if (utils.setLatestRunId) {
         utils.setLatestRunId(runId);
     } else {
-        // Fallback if utils doesn't have setLatestRunId
-        const latestFile = path.join(REPO_ROOT, 'artifacts', 'runs', '.latest');
+        const runsDir = options.path ? path.dirname(runDir) : path.join(REPO_ROOT, 'artifacts', 'runs');
+        const latestFile = path.join(runsDir, '.latest');
         fs.writeFileSync(latestFile, runId, 'utf8');
     }
 
@@ -1555,10 +2325,18 @@ const runVibe = async () => {
 
     console.log(`${c.bold}📂 Kết quả:${c.reset} ${c.cyan}artifacts/runs/latest/${c.reset}\n`);
 
+    // Show verification status
+    if (verificationReport.overall_status === 'fail') {
+        console.log(`${c.yellow}⚠ Verification failed:${c.reset}`);
+        verificationReport.errors.forEach(e => console.log(`  - ${e}`));
+        console.log();
+        process.exit(2);  // Exit code 2 for verification failure
+    }
+
     console.log(`${c.bold}Bước tiếp theo:${c.reset}`);
     console.log(`  Gõ vào IDE: ${c.cyan}Đọc file artifacts/runs/latest/40_spec/spec.md và bắt đầu implement${c.reset}\n`);
 
-    return { runId, intake, spec, tasks, securityReview, deployKit };
+    return { runId, classify, intake, decisions, spec, tasks, verificationReport };
 };
 
 // Run
