@@ -2,6 +2,11 @@
 node_modules/
 .agent/skills/orchestrator/node_modules/
 
+# IDE / Editor local configs
+.claude/
+.vscode/settings.json
+*.local.json
+
 # Logs
 *.log
 .agent/logs/
@@ -21,3 +26,4 @@ node_modules/
 .Trashes
 ehthumbs.db
 Thumbs.db
+nul
