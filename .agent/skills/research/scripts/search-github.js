@@ -202,24 +202,36 @@ const runSearch = async () => {
             return;
         }
 
-        const repos = (result.items || []).map((repo, index) => ({
-            rank: index + 1,
-            name: repo.full_name,
-            url: repo.html_url,
-            stars: repo.stargazers_count,
-            forks: repo.forks_count,
-            last_updated: repo.pushed_at.split('T')[0],
-            description: repo.description || '',
-            language: repo.language || 'Unknown',
-            license: repo.license?.spdx_id || 'Unknown',
-            topics: repo.topics || [],
-            relevance_score: parseFloat(calculateScore(repo, keywords)),
-            technologies: [repo.language, ...(repo.topics || []).slice(0, 5)].filter(Boolean),
-            patterns_found: [],
-            strengths: [],
-            weaknesses: [],
-            notes: ''
-        }));
+        const repos = (result.items || []).map((repo, index) => {
+            const score = parseFloat(calculateScore(repo, keywords));
+            const repoText = `${repo.name} ${repo.description || ''} ${(repo.topics || []).join(' ')}`.toLowerCase();
+            const matchedKeywords = keywords.filter(k => repoText.includes(k.toLowerCase()));
+
+            return {
+                rank: index + 1,
+                name: repo.full_name,
+                url: repo.html_url,
+                stars: repo.stargazers_count,
+                forks: repo.forks_count,
+                last_updated: repo.pushed_at.split('T')[0],
+                description: repo.description || '',
+                language: repo.language || 'Unknown',
+                license: repo.license?.spdx_id || 'Unknown',
+                topics: repo.topics || [],
+                relevance_score: score,
+                why_relevant: matchedKeywords.length > 0
+                    ? `Matches keywords: ${matchedKeywords.join(', ')}`
+                    : 'Matched via general search query',
+                pattern_to_reuse: repo.topics?.length > 0
+                    ? `Reuse patterns from topics: ${repo.topics.slice(0, 3).join(', ')}`
+                    : `Follow standard ${repo.language || 'project'} structure`,
+                technologies: [repo.language, ...(repo.topics || []).slice(0, 5)].filter(Boolean),
+                patterns_found: [],
+                strengths: [],
+                weaknesses: [],
+                notes: ''
+            };
+        });
 
         // Sort by relevance
         repos.sort((a, b) => b.relevance_score - a.relevance_score);
@@ -232,14 +244,15 @@ const runSearch = async () => {
         shortlist.forEach((repo, i) => {
             console.log(`${i + 1}. ${repo.name}`);
             console.log(`   Stars: ${repo.stars} | Score: ${repo.relevance_score}`);
-            console.log(`   ${repo.description.slice(0, 80)}...`);
+            console.log(`   Why: ${repo.why_relevant}`);
             console.log(`   URL: ${repo.url}\n`);
         });
 
         // Build output
         const output = {
-            version: '1.0',
+            version: '1.1',
             run_id: RUN_ID,
+            status: result.items ? 'ok' : 'degraded',
             query: query,
             timestamp: new Date().toISOString(),
             keywords: keywords,

@@ -27,3 +27,4 @@ node_modules/
 ehthumbs.db
 Thumbs.db
 nul
+artifacts/runs/

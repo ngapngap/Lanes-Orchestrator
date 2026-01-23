@@ -2,61 +2,107 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "schemas/research.shortlist.schema.json",
   "title": "research.shortlist.json",
+  "description": "Research shortlist - vibe mode compatible with DoD vNext fields",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "problem_summary",
-    "recommended_path",
-    "rationale",
-    "baseline_verification",
-    "candidates",
-    "assumptions",
-    "open_questions",
-    "provenance"
+    "run_id",
+    "timestamp",
+    "status"
   ],
   "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Run ID"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Research timestamp"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "degraded"],
+      "description": "Research status (DoD vNext G5)"
+    },
+    "query": {
+      "type": ["string", "null"],
+      "description": "Search query used"
+    },
+    "note": {
+      "type": "string",
+      "description": "Status note or error message"
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "url"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Repository name (e.g., owner/repo)"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Repository URL"
+          },
+          "stars": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Star count"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Repository description"
+          },
+          "why_relevant": {
+            "type": "string",
+            "description": "Why this repo is relevant to the project (DoD vNext)"
+          },
+          "pattern_to_reuse": {
+            "type": "string",
+            "description": "Pattern or architecture to reuse from this repo (DoD vNext)"
+          },
+          "relevance_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Relevance score 0-1 (DoD vNext)"
+          }
+        }
+      },
+      "description": "Shortlisted repositories"
+    },
     "problem_summary": {
       "type": "string",
-      "minLength": 1,
-      "description": "Summary of the problem to solve"
+      "description": "Legacy: Summary of the problem"
     },
     "recommended_path": {
       "type": "string",
       "enum": ["reuse", "build", "hybrid"],
-      "description": "Recommended approach"
+      "description": "Legacy: Recommended approach"
     },
     "rationale": {
       "type": "string",
-      "description": "Why this path is recommended"
+      "description": "Legacy: Why this path"
     },
     "baseline_verification": {
       "type": "object",
-      "required": ["required", "cmds"],
       "properties": {
         "required": { "type": "boolean" },
         "cmds": {
           "type": "array",
           "items": { "type": "string" }
         }
-      }
+      },
+      "description": "Legacy: Verification commands"
     },
     "candidates": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "repo_url",
-          "commit_or_tag",
-          "license",
-          "activity_score",
-          "fit_score",
-          "security_notes",
-          "reuse_candidate",
-          "bootstrap_steps",
-          "baseline_verification",
-          "effort_estimate",
-          "risks"
-        ],
         "properties": {
           "repo_url": { "type": "string", "format": "uri" },
           "commit_or_tag": { "type": "string" },
@@ -71,7 +117,6 @@
           },
           "baseline_verification": {
             "type": "object",
-            "required": ["required", "cmds"],
             "properties": {
               "required": { "type": "boolean" },
               "cmds": {
@@ -89,25 +134,28 @@
             "items": { "type": "string" }
           }
         }
-      }
+      },
+      "description": "Legacy: Candidate repos with detailed info"
     },
     "assumptions": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "description": "Legacy: Assumptions"
     },
     "open_questions": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "description": "Legacy: Open questions"
     },
     "provenance": {
       "type": "object",
-      "required": ["timestamp"],
       "properties": {
         "timestamp": { "type": "string", "format": "date-time" },
         "mode": { "type": "string" },
         "model_versions": { "type": "object" },
         "commit_hash": { "type": "string" }
-      }
+      },
+      "description": "Legacy: Provenance info"
     }
   }
 }

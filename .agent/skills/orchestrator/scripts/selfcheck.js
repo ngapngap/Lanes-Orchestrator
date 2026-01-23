@@ -71,6 +71,7 @@ const requiredFiles = [
     'LICENSE_POLICY.md',
     'package.json',
     'schemas/intake.schema.json',
+    'schemas/dod.schema.json',
     'schemas/research.shortlist.schema.json',
     'schemas/research.reuse_assessment.schema.json',
     'schemas/debate.inputs_for_spec.schema.json',

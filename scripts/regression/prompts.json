@@ -1,0 +1,200 @@
+{
+  "version": "1.0",
+  "description": "Regression test prompts for vibe mode - DoD vNext Section 6.2",
+  "prompts": [
+    {
+      "id": "python_cli",
+      "prompt": "Build a Python command-line app with a --health flag that prints OK and exits 0. No database. No authentication.",
+      "expected": {
+        "project_kind": "cli",
+        "language": "python",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'cli'",
+        "classify.language === 'python'",
+        "classify.needs_auth === 'none'",
+        "classify.needs_db === 'none'",
+        "intake.constraints.auth === 'none'",
+        "spec does not contain 'login'",
+        "spec does not contain 'NextAuth'",
+        "spec does not contain 'PostgreSQL'"
+      ]
+    },
+    {
+      "id": "csharp_console",
+      "prompt": "Build a .NET 8 C# console app: --health prints OK exit 0, --hello <name>. No auth, no db.",
+      "expected": {
+        "project_kind": "cli",
+        "language": "dotnet",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'cli'",
+        "classify.language === 'dotnet'",
+        "classify.needs_auth === 'none'",
+        "classify.needs_db === 'none'"
+      ]
+    },
+    {
+      "id": "go_api",
+      "prompt": "Build a Go HTTP API with GET /health returning {status:ok}. No database.",
+      "expected": {
+        "project_kind": "api",
+        "language": "go",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'api'",
+        "classify.language === 'go'",
+        "classify.needs_db === 'none'",
+        "docker-compose does not contain 'postgres'"
+      ]
+    },
+    {
+      "id": "fastapi",
+      "prompt": "Build a FastAPI service with GET /health and GET /hello?name=. No auth. No database.",
+      "expected": {
+        "project_kind": "api",
+        "language": "python",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'api'",
+        "classify.language === 'python'",
+        "classify.needs_auth === 'none'",
+        "classify.needs_db === 'none'",
+        "spec contains 'FastAPI'"
+      ]
+    },
+    {
+      "id": "nextjs_minimal",
+      "prompt": "Build a Next.js app with / and /api/health returning OK. No auth, no db.",
+      "expected": {
+        "project_kind": "web",
+        "language": "node",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'web'",
+        "classify.needs_auth === 'none'",
+        "classify.needs_db === 'none'",
+        "env.example does not contain 'NEXTAUTH'",
+        "env.example does not contain 'DATABASE_URL'"
+      ]
+    },
+    {
+      "id": "ts_library",
+      "prompt": "Create a TypeScript library exporting retry() with exponential backoff and jitter. Provide tests.",
+      "expected": {
+        "project_kind": "library",
+        "language": "node",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'library'",
+        "classify.language === 'node'",
+        "classify.needs_auth === 'none'",
+        "classify.needs_db === 'none'",
+        "spec contains 'retry'"
+      ]
+    },
+    {
+      "id": "python_library",
+      "prompt": "Create a Python package textutils with functions slugify and truncate, with unit tests.",
+      "expected": {
+        "project_kind": "library",
+        "language": "python",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'library'",
+        "classify.language === 'python'",
+        "intake.scope.mvp_features.length >= 2"
+      ]
+    },
+    {
+      "id": "etl",
+      "prompt": "Build a Python script that reads CSV, validates schema, outputs cleaned CSV and a JSON error report.",
+      "expected": {
+        "project_kind": "cli",
+        "language": "python",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind in ['cli', 'data']",
+        "classify.language === 'python'",
+        "classify.needs_db === 'none'"
+      ]
+    },
+    {
+      "id": "desktop",
+      "prompt": "Build a Tkinter desktop app with a counter button and a Health menu that shows OK.",
+      "expected": {
+        "project_kind": "desktop",
+        "language": "python",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind in ['desktop', 'cli']",
+        "classify.language === 'python'",
+        "spec contains 'Tkinter' OR spec contains 'counter'"
+      ]
+    },
+    {
+      "id": "mobile",
+      "prompt": "Build a Flutter app with a counter screen and a Health screen. No backend.",
+      "expected": {
+        "project_kind": "mobile",
+        "language": "dart",
+        "auth": "none",
+        "db": "none"
+      },
+      "assertions": [
+        "classify.project_kind === 'mobile'",
+        "classify.needs_auth === 'none'",
+        "spec contains 'Flutter' OR spec contains 'counter'"
+      ]
+    },
+    {
+      "id": "auth_required",
+      "prompt": "Build a web app that requires login (email+password) and a protected dashboard. Use SQLite.",
+      "expected": {
+        "project_kind": "web",
+        "language": "node",
+        "auth": "email",
+        "db": "sqlite"
+      },
+      "assertions": [
+        "classify.project_kind === 'web'",
+        "classify.needs_auth !== 'none'",
+        "classify.needs_db !== 'none' OR intake.constraints.data_sensitivity !== 'none'",
+        "spec contains 'login' OR spec contains 'auth'"
+      ]
+    },
+    {
+      "id": "db_required",
+      "prompt": "Build an API with CRUD for todos stored in PostgreSQL. Authentication not required.",
+      "expected": {
+        "project_kind": "api",
+        "auth": "none",
+        "db": "postgres"
+      },
+      "assertions": [
+        "classify.project_kind === 'api'",
+        "classify.needs_auth === 'none' OR intake.constraints.auth === 'none'",
+        "classify.needs_db !== 'none' OR spec contains 'PostgreSQL'",
+        "spec does not contain 'login'"
+      ]
+    }
+  ]
+}

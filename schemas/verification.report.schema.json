@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "schemas/verification.report.schema.json",
   "title": "verification.report.json",
+  "description": "DoD-based verification report with gates",
   "type": "object",
   "additionalProperties": false,
-  "required": ["run_id", "status", "commands", "evidence", "summary", "provenance"],
+  "required": ["run_id", "status", "timestamp"],
   "properties": {
     "run_id": {
       "type": "string",
@@ -13,11 +14,43 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pass", "fail"],
+      "enum": ["PASS", "FAIL"],
       "description": "Overall verification status"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When verification was run"
+    },
+    "project_path": {
+      "type": "string",
+      "description": "Path to project being verified"
+    },
+    "dod_path": {
+      "type": "string",
+      "description": "Path to DEFINITION_OF_DONE.md"
+    },
+    "gates": {
+      "type": "object",
+      "description": "Verification gates results",
+      "properties": {
+        "G_DELIVERABLES": {
+          "$ref": "#/$defs/gate"
+        },
+        "G_MUST_NOT": {
+          "$ref": "#/$defs/mustNotGate"
+        },
+        "G_COMMANDS": {
+          "$ref": "#/$defs/commandsGate"
+        },
+        "G_SPEC_EXISTS": {
+          "$ref": "#/$defs/gate"
+        }
+      }
     },
     "commands": {
       "type": "array",
+      "description": "Legacy: List of verification commands run",
       "items": {
         "type": "object",
         "required": ["name", "cmd", "exit_code"],
@@ -32,7 +65,7 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["artifacts"],
+      "description": "Legacy: Evidence artifacts",
       "properties": {
         "artifacts": {
           "type": "array",
@@ -46,7 +79,7 @@
     },
     "summary": {
       "type": "object",
-      "required": ["highlights", "top_failures"],
+      "description": "Legacy: Summary information",
       "properties": {
         "highlights": {
           "type": "array",
@@ -60,11 +93,90 @@
     },
     "provenance": {
       "type": "object",
-      "required": ["timestamp"],
+      "description": "Legacy: Provenance information",
       "properties": {
         "timestamp": { "type": "string", "format": "date-time" },
         "ci": { "type": "string" },
         "commit_hash": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "gate": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "SKIP"]
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "deliverables": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string" },
+                  "exists": { "type": "boolean" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "mustNotGate": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "SKIP"]
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule", "detection"],
+            "properties": {
+              "rule": { "type": "string" },
+              "detection": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "commandsGate": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "SKIP"]
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["command", "passed"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "command": { "type": "string" },
+                  "passed": { "type": "boolean" },
+                  "exit_code": { "type": "integer" },
+                  "output": { "type": "string" },
+                  "duration_ms": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

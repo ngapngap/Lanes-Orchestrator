@@ -2,78 +2,182 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "schemas/intake.schema.json",
   "title": "intake.json",
+  "description": "Project intake document - vibe mode compatible",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "goal",
-    "users",
-    "success_metrics",
-    "mvp_scope",
-    "non_goals",
-    "constraints",
-    "risks",
-    "open_questions",
-    "sizing",
-    "execution_mode"
+    "version",
+    "run_id",
+    "timestamp",
+    "mode",
+    "project",
+    "scope",
+    "constraints"
   ],
   "properties": {
-    "goal": {
+    "version": {
       "type": "string",
-      "minLength": 1,
-      "description": "Primary goal of the project"
+      "description": "Schema version"
     },
-    "users": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 1,
-      "description": "Target users"
-    },
-    "current_workflow": {
+    "run_id": {
       "type": "string",
-      "description": "Current workflow (if any)"
+      "description": "Run ID"
     },
-    "success_metrics": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 1,
-      "description": "How success will be measured"
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
     },
-    "mvp_scope": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 1,
-      "maxItems": 7,
-      "description": "MVP scope (3-7 items)"
+    "mode": {
+      "type": "string",
+      "enum": ["vibe", "standard"],
+      "description": "Pipeline mode"
     },
-    "non_goals": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "What is explicitly out of scope"
+    "project": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project name"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["cli", "api", "web", "library", "data", "desktop", "mobile", "unknown"],
+          "description": "Project kind (DoD vNext)"
+        },
+        "type": {
+          "type": "string",
+          "description": "Project type (legacy, maps to kind)"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Target platform"
+        },
+        "language": {
+          "type": "string",
+          "description": "Primary programming language"
+        },
+        "description": {
+          "type": "string",
+          "description": "Project description"
+        }
+      }
+    },
+    "target_users": {
+      "type": "object",
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "string" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["mvp_features"],
+      "properties": {
+        "mvp_features": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "MVP features (must have at least 2 per DoD)"
+        },
+        "future_features": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "out_of_scope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicitly out of scope items"
+        }
+      }
     },
     "constraints": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Stack/time/budget/security constraints"
+      "type": "object",
+      "properties": {
+        "auth": {
+          "type": "string",
+          "enum": ["none", "email", "api-key", "oauth", "phone", "custom"],
+          "description": "Authentication constraint"
+        },
+        "db": {
+          "type": "string",
+          "enum": ["none", "sqlite", "postgres", "mysql", "mongodb"],
+          "description": "Database constraint (DoD vNext)"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "data_sensitivity": {
+          "type": "string",
+          "description": "Data sensitivity level"
+        },
+        "deploy": {
+          "type": "string",
+          "description": "Deploy target"
+        }
+      }
     },
-    "risks": {
+    "assumptions": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Known risks"
+      "description": "Assumptions made during intake (DoD vNext)"
     },
     "open_questions": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Open questions to resolve"
+      "description": "Unresolved questions (DoD vNext)"
+    },
+    "_raw_answers": {
+      "type": "object",
+      "description": "Raw Q&A answers from vibe mode"
+    },
+    "goal": {
+      "type": "string",
+      "description": "Legacy: Primary goal"
+    },
+    "users": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Legacy: Target users"
+    },
+    "current_workflow": {
+      "type": "string",
+      "description": "Legacy: Current workflow"
+    },
+    "success_metrics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Legacy: Success metrics"
+    },
+    "mvp_scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Legacy: MVP scope"
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Legacy: Non-goals"
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Legacy: Known risks"
     },
     "sizing": {
       "type": "string",
       "enum": ["XS", "S", "M", "L", "XL"],
-      "description": "T-shirt size estimate"
+      "description": "Legacy: T-shirt size"
     },
     "execution_mode": {
       "type": "string",
       "enum": ["fast_build", "standard_pipeline"],
-      "description": "Execution mode"
+      "description": "Legacy: Execution mode"
     }
   }
 }

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/dod.schema.json",
+  "title": "DEFINITION_OF_DONE.md YAML Metadata",
+  "description": "Schema for the YAML frontmatter in DEFINITION_OF_DONE.md",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "project_name", "project_kind", "language", "deliverables"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Run identifier (YYYYMMDD_HHMM_<slug>)"
+    },
+    "project_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable project name"
+    },
+    "project_kind": {
+      "type": "string",
+      "enum": ["cli", "api", "web", "library", "mobile", "other"],
+      "description": "Type of project"
+    },
+    "language": {
+      "type": "string",
+      "enum": ["python", "node", "go", "dotnet", "other"],
+      "description": "Primary programming language"
+    },
+    "auth_constraint": {
+      "type": "string",
+      "enum": ["none", "basic", "jwt", "oauth", "api_key"],
+      "description": "Authentication constraint from intake"
+    },
+    "db_constraint": {
+      "type": "string",
+      "enum": ["none", "sqlite", "postgres", "mysql", "mongodb", "other"],
+      "description": "Database constraint from intake"
+    },
+    "deliverables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "description": "Path to a required deliverable (supports glob patterns)"
+      },
+      "description": "List of required deliverable paths"
+    },
+    "must_not": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Anti-drift rule description"
+      },
+      "description": "List of must-not rules (anti-drift)"
+    },
+    "verification_commands": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Command to run for verification"
+      },
+      "description": "List of commands to run during verification"
+    }
+  }
+}

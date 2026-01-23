@@ -29,21 +29,45 @@
         { "name": "--run-id", "type": "string", "description": "Run ID" }
       ]
     },
-    "fix": {
-      "script": "scripts/fix.js",
-      "description": "Apply auto-fixes for QA blocking issues",
+    "verify": {
+      "script": "scripts/verify.js",
+      "description": "Verify project against DEFINITION_OF_DONE.md",
       "args": [
         { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--path", "type": "string", "description": "Project path to verify" },
+        { "name": "--fast", "type": "boolean", "description": "Skip slow checks (commands)" }
+      ]
+    },
+    "loop": {
+      "script": "scripts/loop.js",
+      "description": "Run verify -> fix -> verify loop until pass or max attempts",
+      "args": [
+        { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--max-attempts", "type": "number", "description": "Max fix attempts (default: 3)" },
+        { "name": "--path", "type": "string", "description": "Project path" },
+        { "name": "--fast", "type": "boolean", "description": "Skip slow checks in verify" }
+      ]
+    },
+    "fix": {
+      "script": "scripts/fix.js",
+      "description": "Apply auto-fixes for verification failures",
+      "args": [
+        { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--attempt-num", "type": "number", "description": "Current attempt number" },
+        { "name": "--project-path", "type": "string", "description": "Project path" },
         { "name": "--approve-change", "type": "boolean", "description": "Approve spec change and reset counter" },
-        { "name": "--rerun-qa", "type": "boolean", "description": "Re-run QA after fixes" },
+        { "name": "--rerun-qa", "type": "boolean", "description": "Re-run verification after fixes" },
         { "name": "--dry-run", "type": "boolean", "description": "Show what would be fixed without applying" }
       ]
     }
   },
-  "triggers": ["vibe", "selfcheck", "init run", "/status"],
+  "triggers": ["vibe", "selfcheck", "init run", "/status", "verify", "loop"],
   "outputs": [
     "40_spec/spec.md",
     "40_spec/task_breakdown.json",
-    "40_spec/NEXT_STEPS.md"
+    "40_spec/DEFINITION_OF_DONE.md",
+    "40_spec/NEXT_STEPS.md",
+    "60_verification/verification.report.json",
+    "70_fix/attempt_*/fix_summary.md"
   ]
 }

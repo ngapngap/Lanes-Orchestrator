@@ -805,13 +805,39 @@ const generateIntake = (answers, runId) => {
         auth = 'none';
     }
 
+    // Build assumptions and open_questions (DoD vNext 4.2.4)
+    const assumptions = [];
+    const openQuestions = [];
+
+    if (auth === 'none') {
+        assumptions.push('No authentication required per prompt');
+    }
+    if (answers.data_sensitivity === 'none' || !answers.data_sensitivity) {
+        assumptions.push('No database/persistence required per prompt');
+    }
+    if (projectType === 'cli' || projectType === 'library') {
+        assumptions.push(`Project type is ${projectType} based on description`);
+    }
+    if (language) {
+        assumptions.push(`Primary language is ${language} based on detection`);
+    }
+
+    // Open questions based on unknowns
+    if (!projectType || projectType === 'unknown') {
+        openQuestions.push('Project type could not be determined from description');
+    }
+    if (!language || language === 'unknown') {
+        openQuestions.push('Programming language not specified');
+    }
+
     return {
-        version: '1.0',
+        version: '1.1',
         run_id: runId,
         timestamp: new Date().toISOString(),
         mode: 'vibe',
         project: {
             name: generateSlug(answers).replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            kind: projectType,
             type: projectType,
             platform: platform,
             language: language,
@@ -828,11 +854,14 @@ const generateIntake = (answers, runId) => {
         },
         constraints: {
             auth: auth || 'none',
+            db: answers.data_sensitivity === 'none' ? 'none' : (answers.data_sensitivity ? 'postgres' : 'none'),
             platform: platform,
             language: language,
             data_sensitivity: answers.data_sensitivity || 'none',
             deploy: answers.deploy || 'Docker'
         },
+        assumptions: assumptions,
+        open_questions: openQuestions,
         _raw_answers: answers
     };
 };
@@ -1760,13 +1789,13 @@ const generateVerificationReport = (classify, intake, decisions, tasks) => {
 
     // Check 4: MVP features not empty
     const mvpFeatures = intake.scope?.mvp_features || [];
-    if (mvpFeatures.length === 0) {
-        errors.push('MVP features list is empty - implementation will have no clear targets');
+    if (mvpFeatures.length < 2) {
+        errors.push(`MVP features list has ${mvpFeatures.length} items - must have at least 2 items per Gate G3`);
     }
     checks.push({
         name: 'mvp_features_defined',
-        status: mvpFeatures.length > 0 ? 'pass' : 'fail',
-        detail: `${mvpFeatures.length} MVP feature(s) defined`
+        status: mvpFeatures.length >= 2 ? 'pass' : 'fail',
+        detail: `${mvpFeatures.length} MVP feature(s) defined (required >= 2)`
     });
 
     // Check 5: Tasks exist
@@ -1942,6 +1971,427 @@ npx aat qa
 
 *${projectName} | ${projectKind} | ${language} | ${taskCount} tasks*
 `;
+};
+
+// ============================================
+// Generate DEFINITION_OF_DONE.md (Repo-wide DoD)
+// ============================================
+
+/**
+ * Generate repo-wide Definition of Done file
+ * @param {object} classify - Classification result
+ * @param {object} intake - Intake document
+ * @param {object} decisions - Decisions document
+ * @param {object} tasks - Task breakdown
+ * @returns {string} DoD markdown content
+ */
+const generateDefinitionOfDone = (classify, intake, decisions, tasks) => {
+    const runId = intake.run_id;
+    const projectKind = classify.classification.project_kind;
+    const language = classify.classification.language;
+    const projectName = intake.project?.name || 'Project';
+    const authConstraint = classify.classification.needs_auth || 'none';
+    const dbConstraint = classify.classification.needs_db || 'none';
+    const deployConstraint = classify.classification.deploy || 'local';
+    const mvpFeatures = intake.scope?.mvp_features || [];
+
+    // Build deliverables based on project kind and language
+    const deliverables = getDeliverables(projectKind, language);
+
+    // Build acceptance criteria from MVP features
+    const acceptanceCriteria = buildAcceptanceCriteria(projectKind, language, mvpFeatures);
+
+    // Build must-not rules from constraints
+    const mustNotRules = buildMustNotRules(authConstraint, dbConstraint, projectKind);
+
+    // Build verification commands
+    const verificationCommands = buildVerificationCommands(projectKind, language, projectName);
+
+    // YAML metadata header (DoD vNext 11.1)
+    const metadata = `---
+run_id: ${runId}
+project_name: ${projectName}
+project_kind: ${projectKind}
+language: ${language}
+constraints:
+  auth: ${authConstraint}
+  db: ${dbConstraint}
+  deploy: ${deployConstraint}
+deliverables:
+${deliverables.map(d => `  - ${d.path}`).join('\n')}
+must_not:
+${mustNotRules.map(r => `  - ${r.rule}`).join('\n')}
+verification_commands:
+${verificationCommands.map(c => `  - ${c.command}`).join('\n')}
+max_fix_attempts_default: 3
+generated_at: ${new Date().toISOString()}
+---`;
+
+    return `${metadata}
+
+# Definition of Done — ${projectName}
+
+> This document defines the acceptance criteria for project completion.
+> All checks must pass for the project to be considered DONE.
+
+---
+
+## 1. Repo Deliverables (must exist)
+
+The following files/folders MUST exist in the project root:
+
+${deliverables.map(d => `- [ ] \`${d.path}\` — ${d.description}`).join('\n')}
+
+---
+
+## 2. Functional Acceptance Criteria (MVP)
+
+These criteria are machine-checkable. Each MUST pass:
+
+${acceptanceCriteria.map((c, i) => `### ${i + 1}. ${c.name}
+- **Check**: ${c.check}
+- **Expected**: ${c.expected}
+- **Command**: \`${c.command}\``).join('\n\n')}
+
+---
+
+## 3. Must-NOT Rules (Anti-Drift)
+
+These constraints MUST NOT be violated:
+
+${mustNotRules.map(r => `- ❌ **${r.rule}**
+  - Detection: ${r.detection}`).join('\n\n')}
+
+---
+
+## 4. Out of Scope
+
+The following are explicitly OUT OF SCOPE for this project:
+
+${decisions.out_of_scope?.map(s => `- ${s}`).join('\n') || '- None specified'}
+
+---
+
+## 5. Verification Commands
+
+Run these commands to verify the project. ALL must exit with code 0:
+
+\`\`\`bash
+${verificationCommands.map(c => `# ${c.description}\n${c.command}`).join('\n\n')}
+\`\`\`
+
+---
+
+## 6. Pass Condition
+
+**PASS** = All of the following:
+1. All deliverables exist
+2. All acceptance criteria pass
+3. No must-not rules violated
+4. All verification commands exit 0
+
+**FAIL** = Any of the above not met
+
+---
+
+## 7. How to Verify
+
+\`\`\`bash
+# Run verification
+npx aat verify --run-id ${runId}
+
+# If failed, run fix loop
+npx aat loop --run-id ${runId} --max-attempts 3
+\`\`\`
+
+---
+
+*Generated by AI Agent Toolkit — Run ID: ${runId}*
+`;
+};
+
+/**
+ * Get required deliverables based on project kind and language
+ */
+const getDeliverables = (projectKind, language) => {
+    const common = [
+        { path: 'README.md', description: 'Project documentation' }
+    ];
+
+    const byKindAndLang = {
+        cli: {
+            python: [
+                { path: 'src/__init__.py', description: 'Package init (or app.py)' },
+                { path: 'pyproject.toml', description: 'Project config (or requirements.txt)' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            node: [
+                { path: 'package.json', description: 'Package config' },
+                { path: 'src/index.js', description: 'Main entry (or bin/)' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            dotnet: [
+                { path: '*.csproj', description: 'Project file' },
+                { path: 'Program.cs', description: 'Entry point' }
+            ],
+            go: [
+                { path: 'go.mod', description: 'Go module file' },
+                { path: 'main.go', description: 'Entry point' }
+            ],
+            default: [
+                { path: 'src/', description: 'Source directory' },
+                { path: 'tests/', description: 'Test directory' }
+            ]
+        },
+        api: {
+            python: [
+                { path: 'main.py', description: 'FastAPI/Flask entry' },
+                { path: 'requirements.txt', description: 'Dependencies' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            node: [
+                { path: 'package.json', description: 'Package config' },
+                { path: 'src/index.js', description: 'Server entry (or app.js)' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            go: [
+                { path: 'go.mod', description: 'Go module file' },
+                { path: 'main.go', description: 'Server entry' }
+            ],
+            default: [
+                { path: 'src/', description: 'Source directory' },
+                { path: 'tests/', description: 'Test directory' }
+            ]
+        },
+        library: {
+            python: [
+                { path: 'src/', description: 'Source package' },
+                { path: 'pyproject.toml', description: 'Build config' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            node: [
+                { path: 'package.json', description: 'Package config' },
+                { path: 'src/index.ts', description: 'Library entry (or index.js)' },
+                { path: 'tests/', description: 'Test directory' }
+            ],
+            default: [
+                { path: 'src/', description: 'Source directory' },
+                { path: 'tests/', description: 'Test directory' }
+            ]
+        },
+        web: {
+            node: [
+                { path: 'package.json', description: 'Package config' },
+                { path: 'src/', description: 'Source directory (or app/, pages/)' },
+                { path: 'public/', description: 'Static assets (optional)' }
+            ],
+            default: [
+                { path: 'src/', description: 'Source directory' },
+                { path: 'index.html', description: 'Entry page (or pages/)' }
+            ]
+        },
+        mobile: {
+            dart: [
+                { path: 'pubspec.yaml', description: 'Flutter config' },
+                { path: 'lib/main.dart', description: 'App entry' }
+            ],
+            default: [
+                { path: 'src/', description: 'Source directory' }
+            ]
+        }
+    };
+
+    const kindDeliverables = byKindAndLang[projectKind] || byKindAndLang.cli;
+    const langDeliverables = kindDeliverables[language] || kindDeliverables.default || [];
+
+    return [...common, ...langDeliverables];
+};
+
+/**
+ * Build acceptance criteria from MVP features
+ */
+const buildAcceptanceCriteria = (projectKind, language, mvpFeatures) => {
+    const criteria = [];
+
+    // Always add a health/basic check based on kind
+    if (projectKind === 'cli') {
+        criteria.push({
+            name: 'CLI Help Command',
+            check: 'Running --help shows usage',
+            expected: 'Exit code 0, output contains usage info',
+            command: language === 'python' ? 'python -m app --help' : 'node src/index.js --help'
+        });
+        criteria.push({
+            name: 'CLI Health Check',
+            check: 'Running --health prints OK',
+            expected: 'Exit code 0, stdout contains "OK"',
+            command: language === 'python' ? 'python -m app --health' : 'node src/index.js --health'
+        });
+    } else if (projectKind === 'api') {
+        criteria.push({
+            name: 'Health Endpoint',
+            check: 'GET /health returns 200',
+            expected: 'HTTP 200, JSON {status: "ok"}',
+            command: 'curl -s http://localhost:8000/health | grep -q ok'
+        });
+    } else if (projectKind === 'web') {
+        criteria.push({
+            name: 'Homepage Loads',
+            check: 'GET / returns 200',
+            expected: 'HTTP 200, HTML content',
+            command: 'curl -s http://localhost:3000/ | head -1'
+        });
+    } else if (projectKind === 'library') {
+        criteria.push({
+            name: 'Library Imports',
+            check: 'Can import main exports',
+            expected: 'No import errors',
+            command: language === 'python' ? 'python -c "from src import *"' : 'node -e "require(\'./src\')"'
+        });
+    }
+
+    // Add criteria from MVP features (first 3)
+    mvpFeatures.slice(0, 3).forEach((feature, i) => {
+        criteria.push({
+            name: `MVP Feature ${i + 1}: ${feature}`,
+            check: `Feature "${feature}" works as specified`,
+            expected: 'Behavior matches spec',
+            command: '# Manual verification or custom test'
+        });
+    });
+
+    // Tests pass
+    criteria.push({
+        name: 'All Tests Pass',
+        check: 'Unit/integration tests pass',
+        expected: 'Exit code 0',
+        command: language === 'python' ? 'python -m pytest -q' : 'npm test'
+    });
+
+    return criteria;
+};
+
+/**
+ * Build must-not rules from constraints
+ */
+const buildMustNotRules = (authConstraint, dbConstraint, projectKind) => {
+    const rules = [];
+
+    if (authConstraint === 'none') {
+        rules.push({
+            rule: 'MUST NOT add authentication',
+            detection: 'No login/auth routes, no NEXTAUTH_*, no JWT/session config'
+        });
+        rules.push({
+            rule: 'MUST NOT include auth dependencies',
+            detection: 'No next-auth, passport, firebase-auth in dependencies'
+        });
+    }
+
+    if (dbConstraint === 'none') {
+        rules.push({
+            rule: 'MUST NOT add database',
+            detection: 'No DATABASE_URL, no postgres/mysql/sqlite in docker-compose'
+        });
+        rules.push({
+            rule: 'MUST NOT include ORM/DB dependencies',
+            detection: 'No prisma, sequelize, sqlalchemy, typeorm in dependencies'
+        });
+    }
+
+    if (projectKind === 'cli' || projectKind === 'api') {
+        rules.push({
+            rule: 'MUST NOT add UI/frontend',
+            detection: 'No React, Vue, Angular dependencies; no pages/ or components/'
+        });
+    }
+
+    if (projectKind === 'library') {
+        rules.push({
+            rule: 'MUST NOT add runtime server',
+            detection: 'No express, fastapi, http server in main code'
+        });
+    }
+
+    return rules;
+};
+
+/**
+ * Build verification commands based on project kind and language
+ */
+const buildVerificationCommands = (projectKind, language, projectName) => {
+    const commands = [];
+
+    // Install dependencies
+    if (language === 'python') {
+        commands.push({
+            description: 'Install dependencies',
+            command: 'pip install -e . || pip install -r requirements.txt'
+        });
+    } else if (language === 'node') {
+        commands.push({
+            description: 'Install dependencies',
+            command: 'npm ci || npm install'
+        });
+    } else if (language === 'go') {
+        commands.push({
+            description: 'Download dependencies',
+            command: 'go mod download'
+        });
+    }
+
+    // Lint (if applicable)
+    if (language === 'python') {
+        commands.push({
+            description: 'Lint check (optional)',
+            command: 'python -m flake8 src/ --max-line-length=120 || true'
+        });
+    } else if (language === 'node') {
+        commands.push({
+            description: 'Lint check (optional)',
+            command: 'npm run lint || true'
+        });
+    }
+
+    // Run tests
+    if (language === 'python') {
+        commands.push({
+            description: 'Run tests',
+            command: 'python -m pytest -q'
+        });
+    } else if (language === 'node') {
+        commands.push({
+            description: 'Run tests',
+            command: 'npm test'
+        });
+    } else if (language === 'go') {
+        commands.push({
+            description: 'Run tests',
+            command: 'go test ./...'
+        });
+    }
+
+    // Smoke test based on kind
+    if (projectKind === 'cli') {
+        if (language === 'python') {
+            commands.push({
+                description: 'Smoke test: CLI health',
+                command: `python -m ${projectName.toLowerCase().replace(/\\s+/g, '_')} --health`
+            });
+        } else {
+            commands.push({
+                description: 'Smoke test: CLI health',
+                command: 'node src/index.js --health'
+            });
+        }
+    } else if (projectKind === 'api') {
+        commands.push({
+            description: 'Smoke test: Start server and check health',
+            command: '# Start server in background, curl /health, then stop'
+        });
+    }
+
+    return commands;
 };
 
 // Build research query based on project type
@@ -2211,14 +2661,21 @@ const runVibe = async () => {
     log('Spec saved');
 
     // Step 7: Generate tasks (lane-aware)
-    console.log(`${c.yellow}[6/9]${c.reset} Chia nhỏ công việc...`);
+    console.log(`${c.yellow}[6/10]${c.reset} Chia nhỏ công việc...`);
     const tasks = generateTasks(intake, classify);
     fs.writeFileSync(path.join(runDir, '40_spec', 'task_breakdown.json'), JSON.stringify(tasks, null, 2));
     console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/task_breakdown.json (${tasks.total_tasks} tasks)\n`);
     log(`Tasks: ${tasks.total_tasks}`);
 
+    // Step 7: Generate DEFINITION_OF_DONE.md (Repo-wide DoD)
+    console.log(`${c.yellow}[7/10]${c.reset} Tạo Definition of Done...`);
+    const dodContent = generateDefinitionOfDone(classify, intake, decisions, tasks);
+    fs.writeFileSync(path.join(runDir, '40_spec', 'DEFINITION_OF_DONE.md'), dodContent);
+    console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/DEFINITION_OF_DONE.md\n`);
+    log('DoD generated');
+
     // Step 8: Security Review + Verification Report
-    console.log(`${c.yellow}[7/9]${c.reset} Security review & verification...`);
+    console.log(`${c.yellow}[8/10]${c.reset} Security review & verification...`);
     const securityReview = generateSecurityReview(intake);
     fs.writeFileSync(path.join(runDir, '60_verification', 'security_review.md'), securityReview);
 
@@ -2231,7 +2688,7 @@ const runVibe = async () => {
     log(`Verification: ${verificationReport.overall_status}`);
 
     // Step 9: Deploy Kit (conditional based on project type and db setting)
-    console.log(`${c.yellow}[8/9]${c.reset} Tạo deploy kit...`);
+    console.log(`${c.yellow}[9/10]${c.reset} Tạo deploy kit...`);
     const projectKind = classify.classification.project_kind;
     const needsDb = classify.classification.needs_db !== 'none';
     const deployTarget = classify.classification.deploy;
@@ -2261,7 +2718,7 @@ const runVibe = async () => {
     log('Deploy kit saved');
 
     // Step 10: Generate NEXT_STEPS (per-kind)
-    console.log(`${c.yellow}[9/9]${c.reset} Tạo hướng dẫn...`);
+    console.log(`${c.yellow}[10/10]${c.reset} Tạo hướng dẫn...`);
     const nextSteps = generateNextSteps(intake, tasks, classify);
     fs.writeFileSync(path.join(runDir, '40_spec', 'NEXT_STEPS.md'), nextSteps);
     console.log(`  ${c.green}✓${c.reset} Saved: 40_spec/NEXT_STEPS.md\n`);
@@ -2297,6 +2754,7 @@ ${verificationReport.warnings.length > 0 ? `- **Warnings:** ${verificationReport
 - 30_decisions/decisions.json
 - 40_spec/spec.md
 - 40_spec/task_breakdown.json
+- 40_spec/DEFINITION_OF_DONE.md
 - 40_spec/NEXT_STEPS.md
 - 60_verification/security_review.md
 - 60_verification/verification.report.json
@@ -2330,7 +2788,7 @@ ${verificationReport.recommendation}
         console.log(`${c.yellow}⚠ Verification failed:${c.reset}`);
         verificationReport.errors.forEach(e => console.log(`  - ${e}`));
         console.log();
-        process.exit(2);  // Exit code 2 for verification failure
+        process.exit(1);  // Exit code 1 for gate/verification failure (DoD 3.3)
     }
 
     console.log(`${c.bold}Bước tiếp theo:${c.reset}`);
@@ -2340,4 +2798,7 @@ ${verificationReport.recommendation}
 };
 
 // Run
-runVibe().catch(console.error);
+runVibe().catch(e => {
+    console.error(`[ERROR] ${e.message || e}`);
+    process.exit(2);  // Exit code 2 for runtime error (DoD 3.3)
+});
