@@ -206,11 +206,51 @@ const listRuns = () => {
 };
 
 /**
- * Get latest run ID
+ * Get latest run ID (from .latest file or by listing)
  */
 const getLatestRunId = () => {
+  // First try .latest file
+  const latestFile = path.join(ARTIFACTS_DIR, '.latest');
+  if (fs.existsSync(latestFile)) {
+    const runId = fs.readFileSync(latestFile, 'utf8').trim();
+    if (runId && fs.existsSync(path.join(ARTIFACTS_DIR, runId))) {
+      return runId;
+    }
+  }
+  // Fallback to listing
   const runs = listRuns();
   return runs.length > 0 ? runs[0] : null;
+};
+
+/**
+ * Set latest run ID (creates .latest file and symlink)
+ */
+const setLatestRunId = (runId) => {
+  if (!fs.existsSync(ARTIFACTS_DIR)) {
+    fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
+  }
+
+  // Write .latest file
+  const latestFile = path.join(ARTIFACTS_DIR, '.latest');
+  fs.writeFileSync(latestFile, runId, 'utf8');
+
+  // Create/update symlink (cross-platform)
+  const latestLink = path.join(ARTIFACTS_DIR, 'latest');
+  const targetPath = path.join(ARTIFACTS_DIR, runId);
+
+  try {
+    // Remove existing symlink/file
+    if (fs.existsSync(latestLink)) {
+      fs.unlinkSync(latestLink);
+    }
+    // Create symlink (junction on Windows for directory)
+    fs.symlinkSync(targetPath, latestLink, 'junction');
+  } catch (e) {
+    // Symlink may fail on some Windows configs, .latest file is enough
+    console.warn(`Could not create symlink: ${e.message}`);
+  }
+
+  return latestFile;
 };
 
 module.exports = {
@@ -228,5 +268,6 @@ module.exports = {
   getProvenance,
   getGitCommit,
   listRuns,
-  getLatestRunId
+  getLatestRunId,
+  setLatestRunId
 };

@@ -807,7 +807,7 @@ docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
     };
 };
 
-// Generate NEXT_STEPS.md (For users already in IDE - Claude Code, Cursor, etc.)
+// Generate NEXT_STEPS.md (For users already in IDE - no run_id, use "latest")
 const generateNextSteps = (intake, tasks) => {
     const totalHours = tasks.estimated_total_hours;
     const projectName = intake.project.name;
@@ -827,7 +827,7 @@ Bây giờ bạn có thể bắt đầu code ngay trong IDE này.
 
 Gõ vào chat của IDE (Claude Code, Cursor, Windsurf...):
 
-> Đọc file spec.md và bắt đầu implement từ task đầu tiên
+> Đọc file artifacts/runs/latest/40_spec/spec.md và bắt đầu implement
 
 ### Bước 2: Theo dõi tiến độ
 
@@ -846,40 +846,36 @@ Khi AI báo xong, gõ:
 
 ---
 
-## 📋 Danh sách công việc
-
-Có **${taskCount} tasks** cần làm (~${totalHours} giờ ước tính):
+## 📋 Danh sách công việc (${taskCount} tasks)
 
 ${tasks.tasks.slice(0, 7).map((t, i) => `${i + 1}. ${t.name}`).join('\n')}
 ${tasks.tasks.length > 7 ? `\n_(và ${tasks.tasks.length - 7} tasks khác)_` : ''}
 
 ---
 
-## 📁 Các file đã tạo
+## 📁 Đường dẫn kết quả
 
-| File | Mục đích |
-|------|----------|
-| **spec.md** | Bản thiết kế chi tiết - AI đọc file này để code |
-| **task_breakdown.json** | Danh sách việc cần làm |
-| **security_review.md** | Checklist bảo mật |
-| **deploy/** | Files để deploy khi code xong |
+\`\`\`
+artifacts/runs/latest/
+├── 40_spec/spec.md          ← Đặc tả (gửi cho AI)
+├── 40_spec/NEXT_STEPS.md    ← File này
+├── deploy/                   ← Docker files
+└── ...
+\`\`\`
 
 ---
 
 ## ❓ Gặp vấn đề?
 
-**AI làm sai so với yêu cầu?**
-→ Nói: "Dừng lại, đọc lại spec.md phần [tên tính năng]"
+**AI làm sai?** → Nói: "Đọc lại spec.md phần [tên tính năng]"
 
-**Muốn thêm tính năng?**
-→ Hoàn thành MVP trước, rồi mới thêm sau
+**Muốn deploy?** → Gõ: \`npx aat deploy\` hoặc xem \`artifacts/runs/latest/deploy/DEPLOY.md\`
 
-**Muốn deploy?**
-→ Xem file deploy/DEPLOY.md
+**Muốn chạy QA?** → Gõ: \`npx aat qa\`
 
 ---
 
-*Dự án: ${projectName} | Tasks: ${taskCount} | Est: ${totalHours}h*
+*${projectName} | ${taskCount} tasks | ~${totalHours}h*
 `;
 };
 
@@ -1058,18 +1054,24 @@ const runVibe = async () => {
     const nextStepsPath = utils.writeArtifact(runId, 'spec', 'NEXT_STEPS.md', nextSteps);
     console.log(`  ${c.green}✓${c.reset} Saved: ${nextStepsPath}\n`);
 
-    // Summary (Non-coder friendly - only show 2 essential files)
+    // Set this as latest run
+    if (utils.setLatestRunId) {
+        utils.setLatestRunId(runId);
+    } else {
+        // Fallback if utils doesn't have setLatestRunId
+        const latestFile = path.join(REPO_ROOT, 'artifacts', 'runs', '.latest');
+        fs.writeFileSync(latestFile, runId, 'utf8');
+    }
+
+    // Summary (Non-coder friendly - show output path, no run_id)
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
     console.log(`${c.green}${c.bold}   ✅ HOÀN THÀNH!${c.reset}`);
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
-    console.log(`${c.bold}Bạn chỉ cần quan tâm 2 file:${c.reset}\n`);
-    console.log(`  ${c.cyan}1. NEXT_STEPS.md${c.reset}  → Đọc file này để biết bước tiếp theo`);
-    console.log(`  ${c.cyan}2. spec.md${c.reset}        → Gửi file này cho AI hoặc developer\n`);
+    console.log(`${c.bold}📂 Kết quả:${c.reset} ${c.cyan}artifacts/runs/latest/${c.reset}\n`);
 
-    console.log(`${c.dim}(Các file khác trong thư mục là dành cho developer, bạn không cần mở)${c.reset}\n`);
-
-    console.log(`${c.bold}Mở file NEXT_STEPS.md ngay bây giờ!${c.reset}\n`);
+    console.log(`${c.bold}Bước tiếp theo:${c.reset}`);
+    console.log(`  Gõ vào IDE: ${c.cyan}Đọc file artifacts/runs/latest/40_spec/spec.md và bắt đầu implement${c.reset}\n`);
 
     return { runId, intake, spec, tasks, securityReview, deployKit };
 };
