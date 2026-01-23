@@ -8,21 +8,14 @@
       "description": "Search GitHub for similar repos",
       "args": [
         { "name": "--query", "type": "string", "description": "Search query" },
-        { "name": "--limit", "type": "number", "description": "Max results", "default": 10 }
-      ]
-    },
-    "assess": {
-      "script": "scripts/assess-reuse.js",
-      "description": "Assess reuse potential of candidates",
-      "args": [
-        { "name": "--input", "type": "string", "description": "Shortlist file" }
+        { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--limit", "type": "number", "description": "Max results", "default": 20 }
       ]
     }
   },
   "triggers": ["research", "search repos", "/research"],
   "outputs": [
     "20_research/research.shortlist.json",
-    "20_research/research.reuse_assessment.json",
     "20_research/research.patterns.md"
   ]
 }
