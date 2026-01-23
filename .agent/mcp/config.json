@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "node",
+      "args": [".agent/mcp/servers/github-server.js"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "brave-search": {
+      "command": "node",
+      "args": [".agent/mcp/servers/brave-server.js"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      }
+    },
+    "artifacts": {
+      "command": "node",
+      "args": [".agent/mcp/servers/artifacts-server.js"]
+    }
+  }
+}

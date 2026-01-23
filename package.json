@@ -1,0 +1,45 @@
+{
+  "name": "ai-agent-toolkit",
+  "version": "1.0.0",
+  "description": "Complete pipeline for software development lifecycle, orchestrated by AI agents",
+  "main": "bin/ai-agent-toolkit.js",
+  "bin": {
+    "ai-agent-toolkit": "./bin/ai-agent-toolkit.js",
+    "aat": "./bin/ai-agent-toolkit.js"
+  },
+  "scripts": {
+    "selfcheck": "node bin/ai-agent-toolkit.js selfcheck",
+    "init": "node bin/ai-agent-toolkit.js init",
+    "intake": "node bin/ai-agent-toolkit.js intake",
+    "research": "node bin/ai-agent-toolkit.js research",
+    "debate": "node bin/ai-agent-toolkit.js debate",
+    "spec": "node bin/ai-agent-toolkit.js spec",
+    "qa": "node bin/ai-agent-toolkit.js qa",
+    "review": "node bin/ai-agent-toolkit.js review",
+    "test:generate": "node bin/ai-agent-toolkit.js test",
+    "list": "node bin/ai-agent-toolkit.js list",
+    "status": "node bin/ai-agent-toolkit.js status"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "pipeline",
+    "sdlc",
+    "spec-driven",
+    "claude",
+    "orchestrator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ngapngap/AI-Agent-Toolkit.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {}
+}
