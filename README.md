@@ -20,11 +20,13 @@ npx aat vibe "app đặt lịch cho tiệm nail, khách đặt online"
 ```
 
 **Vibe Mode sẽ:**
-1. Hỏi bạn 5 câu đơn giản về dự án
-2. Tự động chạy pipeline (intake → research → spec → tasks)
-3. Xuất ra 3 file:
+1. Hỏi bạn 6 câu đơn giản về dự án
+2. Tự động chạy pipeline (intake → research → spec → tasks → security → deploy)
+3. Xuất ra các file:
    - `spec.md` - Bản mô tả chi tiết cho developer/AI
    - `task_breakdown.json` - Danh sách việc cần làm
+   - `security_review.md` - Đánh giá bảo mật + OWASP checklist
+   - `deploy/` - Dockerfile, docker-compose.yml, DEPLOY.md
    - `NEXT_STEPS.md` - Hướng dẫn bước tiếp theo (dễ hiểu)
 
 ---
@@ -154,6 +156,11 @@ npx aat status  # Uses latest run
 |------|----------|------------|
 | `spec.md` | Bản mô tả chi tiết dự án | Developer, AI Agent |
 | `task_breakdown.json` | Danh sách việc cần làm | Developer, PM |
+| `security_review.md` | Đánh giá bảo mật, OWASP checklist | Developer, Security |
+| `deploy/Dockerfile` | Docker build config | DevOps |
+| `deploy/docker-compose.yml` | Container orchestration | DevOps |
+| `deploy/DEPLOY.md` | Hướng dẫn deploy | DevOps, Developer |
+| `deploy/env.example` | Environment variables template | Developer |
 | `NEXT_STEPS.md` | Hướng dẫn bước tiếp theo | Bạn (non-technical) |
 
 ### Advanced Mode Output
@@ -170,9 +177,15 @@ artifacts/runs/<run_id>/
 │   ├── spec.md
 │   ├── task_breakdown.json
 │   └── NEXT_STEPS.md
-└── 60_verification/
-    ├── report.json
-    └── summary.md
+├── 60_verification/
+│   ├── report.json
+│   ├── summary.md
+│   └── security_review.md
+└── deploy/
+    ├── Dockerfile
+    ├── docker-compose.yml
+    ├── env.example
+    └── DEPLOY.md
 ```
 
 ---
@@ -180,25 +193,25 @@ artifacts/runs/<run_id>/
 ## Pipeline Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  VIBE MODE (1 command)                                      │
-│  npx aat vibe                                               │
-│                                                             │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  │
-│  │  Intake  │ → │ Research │ → │   Spec   │ → │  Tasks   │  │
-│  │ (5 Q&A)  │   │ (GitHub) │   │ (spec.md)│   │ (.json)  │  │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘  │
-│                                     ↓                       │
-│                           NEXT_STEPS.md                     │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  VIBE MODE (1 command)                                              │
+│  npx aat vibe                                                       │
+│                                                                     │
+│  ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌──────────┐  │
+│  │ Intake │ → │Research│ → │  Spec  │ → │Security│ → │  Deploy  │  │
+│  │(6 Q&A) │   │(GitHub)│   │(spec.md)│   │(review)│   │  (kit)   │  │
+│  └────────┘   └────────┘   └────────┘   └────────┘   └──────────┘  │
+│                                  ↓                                  │
+│                          NEXT_STEPS.md                              │
+└─────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────┐
-│  ADVANCED MODE (step by step)                               │
-│                                                             │
-│  init → intake → research → debate → spec → tasks → qa     │
-│                     ↓           ↓        ↓        ↓         │
-│               shortlist    decision   spec.md   report      │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  ADVANCED MODE (step by step)                                       │
+│                                                                     │
+│  init → intake → research → debate → spec → tasks → qa              │
+│                     ↓           ↓        ↓        ↓                 │
+│               shortlist    decision   spec.md   report              │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -98,7 +98,7 @@ const ask = (rl, question) => new Promise(resolve => {
     rl.question(question, answer => resolve(answer.trim()));
 });
 
-// The 5 vibe questions
+// The 6 vibe questions (enhanced for production-ready output)
 const VIBE_QUESTIONS = [
     {
         id: 'goal',
@@ -125,10 +125,16 @@ const VIBE_QUESTIONS = [
         default: 'email'
     },
     {
-        id: 'constraints',
-        question: '5. Yêu cầu đặc biệt? (thời gian, ngân sách, bảo mật, ngôn ngữ)',
-        example: 'VD: cần xong trong 2 tuần, tiếng Việt, bảo mật thông tin khách',
-        default: 'không có yêu cầu đặc biệt'
+        id: 'data_sensitivity',
+        question: '5. Dữ liệu nhạy cảm? (thông tin cá nhân/thanh toán/y tế/không có)',
+        example: 'VD: có thông tin cá nhân khách hàng, không có thanh toán',
+        default: 'thông tin cá nhân cơ bản'
+    },
+    {
+        id: 'deploy',
+        question: '6. Deploy ở đâu? (Vercel/Docker/VPS/chưa biết)',
+        example: 'VD: Vercel (free), hoặc Docker trên VPS',
+        default: 'Docker'
     }
 ];
 
@@ -146,7 +152,7 @@ const collectAnswers = async (initialDescription) => {
         answers.initial = initialDescription;
     }
 
-    console.log(`${c.dim}Trả lời 5 câu hỏi sau (Enter để dùng mặc định):${c.reset}\n`);
+    console.log(`${c.dim}Trả lời 6 câu hỏi sau (Enter để dùng mặc định):${c.reset}\n`);
 
     for (const q of VIBE_QUESTIONS) {
         console.log(`${c.yellow}${q.question}${c.reset}`);
@@ -238,7 +244,8 @@ const generateIntake = (answers, runId) => {
         constraints: {
             auth: answers.auth || 'email',
             platform: answers.platform || 'web responsive',
-            special: answers.constraints || ''
+            data_sensitivity: answers.data_sensitivity || 'unknown',
+            deploy: answers.deploy || 'Docker'
         },
         _raw_answers: answers
     };
@@ -430,7 +437,304 @@ const generateTasks = (intake) => {
         total_tasks: tasks.length,
         estimated_total_hours: tasks.reduce((sum, t) => sum + t.estimated_hours, 0),
         tasks,
-        lanes: ['setup', 'api', 'ui', 'qa', 'devops']
+        lanes: ['setup', 'api', 'ui', 'qa', 'devops', 'security']
+    };
+};
+
+// Generate Security Review (Layer C)
+const generateSecurityReview = (intake) => {
+    const dataSensitivity = intake.constraints?.data_sensitivity || 'unknown';
+    const hasAuth = intake.constraints?.auth && intake.constraints.auth !== 'không';
+    const hasPII = dataSensitivity.includes('cá nhân') || dataSensitivity.includes('personal');
+    const hasPayment = dataSensitivity.includes('thanh toán') || dataSensitivity.includes('payment');
+    const hasHealth = dataSensitivity.includes('y tế') || dataSensitivity.includes('health');
+
+    const threats = [];
+    const mitigations = [];
+    const tasks = [];
+
+    // Authentication threats
+    if (hasAuth) {
+        threats.push('Brute force attacks on login');
+        threats.push('Session hijacking');
+        mitigations.push('Rate limiting on auth endpoints');
+        mitigations.push('Secure session management (httpOnly, secure cookies)');
+        tasks.push({ name: 'Implement rate limiting', priority: 'P0', lane: 'security' });
+        tasks.push({ name: 'Configure secure session cookies', priority: 'P0', lane: 'security' });
+    }
+
+    // PII threats
+    if (hasPII) {
+        threats.push('Data breach exposing personal information');
+        threats.push('Unauthorized access to user data');
+        mitigations.push('Encrypt PII at rest and in transit');
+        mitigations.push('Implement role-based access control');
+        tasks.push({ name: 'Add data encryption for PII fields', priority: 'P0', lane: 'security' });
+        tasks.push({ name: 'Implement RBAC for data access', priority: 'P1', lane: 'security' });
+    }
+
+    // Payment threats
+    if (hasPayment) {
+        threats.push('Payment fraud');
+        threats.push('Credit card data theft');
+        mitigations.push('Use PCI-compliant payment provider (Stripe, PayPal)');
+        mitigations.push('Never store raw card numbers');
+        tasks.push({ name: 'Integrate PCI-compliant payment gateway', priority: 'P0', lane: 'security' });
+    }
+
+    // Health data threats
+    if (hasHealth) {
+        threats.push('HIPAA/health data compliance violations');
+        mitigations.push('Implement audit logging');
+        mitigations.push('Consider HIPAA compliance requirements');
+        tasks.push({ name: 'Add audit logging for health data access', priority: 'P0', lane: 'security' });
+    }
+
+    // OWASP baseline
+    const owaspChecklist = [
+        { item: 'SQL Injection', check: 'Use parameterized queries/ORM', status: 'pending' },
+        { item: 'XSS', check: 'Sanitize user input, use Content-Security-Policy', status: 'pending' },
+        { item: 'CSRF', check: 'Use CSRF tokens for state-changing requests', status: 'pending' },
+        { item: 'Broken Auth', check: 'Implement proper session management', status: hasAuth ? 'pending' : 'n/a' },
+        { item: 'Sensitive Data Exposure', check: 'Use HTTPS, encrypt at rest', status: 'pending' },
+        { item: 'Security Misconfiguration', check: 'Review default configs, disable debug in prod', status: 'pending' },
+        { item: 'Components with Vulnerabilities', check: 'Run npm audit, keep deps updated', status: 'pending' }
+    ];
+
+    return `# Security Review - ${intake.project.name}
+
+## Data Classification
+
+| Category | Has Data | Sensitivity Level |
+|----------|----------|-------------------|
+| Personal Information (PII) | ${hasPII ? 'Yes' : 'No'} | ${hasPII ? 'High' : 'Low'} |
+| Payment Data | ${hasPayment ? 'Yes' : 'No'} | ${hasPayment ? 'Critical' : 'N/A'} |
+| Health Data | ${hasHealth ? 'Yes' : 'No'} | ${hasHealth ? 'Critical' : 'N/A'} |
+| Authentication | ${hasAuth ? 'Yes' : 'No'} | ${hasAuth ? 'High' : 'Low'} |
+
+## Threat Model
+
+### Identified Threats
+${threats.length > 0 ? threats.map((t, i) => `${i + 1}. ${t}`).join('\n') : '- No critical threats identified based on data classification'}
+
+### Mitigations
+${mitigations.length > 0 ? mitigations.map((m, i) => `${i + 1}. ${m}`).join('\n') : '- Standard security practices recommended'}
+
+## OWASP Top 10 Checklist
+
+| Vulnerability | Mitigation | Status |
+|---------------|------------|--------|
+${owaspChecklist.map(c => `| ${c.item} | ${c.check} | ${c.status} |`).join('\n')}
+
+## Secret Handling
+
+- [ ] Use environment variables for secrets (never commit to git)
+- [ ] Create .env.example with placeholder values
+- [ ] Add .env to .gitignore
+- [ ] Document required secrets in DEPLOY.md
+
+## Security Tasks (Add to DAG)
+
+${tasks.length > 0 ? tasks.map((t, i) => `${i + 1}. **${t.name}** (${t.priority}, lane: ${t.lane})`).join('\n') : 'No additional security tasks required for MVP'}
+
+---
+
+*Generated by AI Agent Toolkit - Security Review*
+*Run ID: ${intake.run_id}*
+`;
+};
+
+// Generate Deploy Kit (Layer C)
+const generateDeployKit = (intake) => {
+    const projectName = generateSlug(intake._raw_answers).replace(/-/g, '_');
+    const deployTarget = intake.constraints?.deploy || 'Docker';
+    const platform = intake.constraints?.platform || 'web';
+    const hasAuth = intake.constraints?.auth && intake.constraints.auth !== 'không';
+
+    const dockerfile = `# Dockerfile for ${intake.project.name}
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy source
+COPY . .
+
+# Build
+RUN npm run build
+
+# Production image
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy built assets
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+`;
+
+    const dockerCompose = `version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=\${DATABASE_URL}
+${hasAuth ? '      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}\n      - NEXTAUTH_URL=${NEXTAUTH_URL}' : ''}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=\${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=\${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=\${DB_NAME:-${projectName}}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+`;
+
+    const envExample = `# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${projectName}
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=${projectName}
+
+${hasAuth ? `# Authentication
+NEXTAUTH_SECRET=your-secret-key-here-min-32-chars
+NEXTAUTH_URL=http://localhost:3000
+` : ''}
+# API Keys (optional)
+# BRAVE_API_KEY=
+# GITHUB_TOKEN=
+
+# App Config
+NODE_ENV=development
+PORT=3000
+`;
+
+    const deployMd = `# Deploy Guide - ${intake.project.name}
+
+## Quick Start (Docker)
+
+### 1. Prerequisites
+- Docker & Docker Compose installed
+- Git
+
+### 2. Clone & Configure
+
+\`\`\`bash
+git clone <your-repo-url>
+cd ${generateSlug(intake._raw_answers)}
+
+# Copy environment file
+cp env.example .env
+
+# Edit .env with your values
+nano .env
+\`\`\`
+
+### 3. Build & Run
+
+\`\`\`bash
+# Build and start
+docker-compose up -d --build
+
+# Check logs
+docker-compose logs -f app
+
+# App will be available at http://localhost:3000
+\`\`\`
+
+### 4. Database Migration
+
+\`\`\`bash
+# Run migrations
+docker-compose exec app npx prisma migrate deploy
+
+# Seed data (if available)
+docker-compose exec app npx prisma db seed
+\`\`\`
+
+---
+
+## Production Deploy
+
+### Option A: VPS (DigitalOcean, Linode, etc.)
+
+1. SSH into server
+2. Install Docker & Docker Compose
+3. Clone repo
+4. Configure .env with production values
+5. Run \`docker-compose -f docker-compose.prod.yml up -d\`
+6. Setup reverse proxy (nginx/Caddy)
+7. Configure SSL (Let's Encrypt)
+
+### Option B: Vercel (Recommended for Next.js)
+
+1. Push to GitHub
+2. Connect repo to Vercel
+3. Configure environment variables in Vercel dashboard
+4. Deploy
+
+---
+
+## Monitoring
+
+\`\`\`bash
+# View logs
+docker-compose logs -f
+
+# Check status
+docker-compose ps
+
+# Restart
+docker-compose restart
+
+# Stop
+docker-compose down
+\`\`\`
+
+## Backup
+
+\`\`\`bash
+# Backup database
+docker-compose exec db pg_dump -U postgres ${projectName} > backup.sql
+
+# Restore
+docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
+\`\`\`
+
+---
+
+*Generated by AI Agent Toolkit*
+*Run ID: ${intake.run_id}*
+`;
+
+    return {
+        dockerfile,
+        dockerCompose,
+        envExample,
+        deployMd
     };
 };
 
@@ -624,7 +928,7 @@ const runVibe = async () => {
     console.log(`\n${c.magenta}${c.bold}╔══════════════════════════════════════════════════════════════╗${c.reset}`);
     console.log(`${c.magenta}${c.bold}║            🎨 VIBE MODE - AI Agent Toolkit                   ║${c.reset}`);
     console.log(`${c.magenta}${c.bold}╚══════════════════════════════════════════════════════════════╝${c.reset}`);
-    console.log(`\n${c.dim}Mô tả dự án → Nhận spec + tasks + hướng dẫn${c.reset}\n`);
+    console.log(`\n${c.dim}Mô tả dự án → Nhận spec + tasks + security + deploy kit${c.reset}\n`);
 
     // Step 1: Collect answers
     const answers = await collectAnswers(options.description);
@@ -643,13 +947,13 @@ const runVibe = async () => {
     console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
     // Step 3: Generate intake
-    console.log(`${c.yellow}[1/4]${c.reset} Thu thập yêu cầu...`);
+    console.log(`${c.yellow}[1/7]${c.reset} Thu thập yêu cầu...`);
     const intake = generateIntake(answers, runId);
     const intakePath = utils.writeArtifact(runId, 'intake', 'intake.json', intake);
     console.log(`  ${c.green}✓${c.reset} Saved: ${intakePath}\n`);
 
     // Step 4: Try research (best effort)
-    console.log(`${c.yellow}[2/4]${c.reset} Nghiên cứu giải pháp...`);
+    console.log(`${c.yellow}[2/7]${c.reset} Nghiên cứu giải pháp...`);
     const research = await tryResearch(intake);
     if (research.success) {
         utils.writeArtifact(runId, 'research', 'research.shortlist.json', {
@@ -663,7 +967,7 @@ const runVibe = async () => {
     }
 
     // Step 5: Generate spec
-    console.log(`${c.yellow}[3/4]${c.reset} Tạo specification...`);
+    console.log(`${c.yellow}[3/7]${c.reset} Tạo specification...`);
     const researchNote = research.success
         ? `Repos tham khảo: ${research.repos.map(r => r.name).join(', ')}`
         : research.note;
@@ -672,14 +976,38 @@ const runVibe = async () => {
     console.log(`  ${c.green}✓${c.reset} Saved: ${specPath}\n`);
 
     // Step 6: Generate tasks
-    console.log(`${c.yellow}[4/4]${c.reset} Chia nhỏ công việc...`);
+    console.log(`${c.yellow}[4/7]${c.reset} Chia nhỏ công việc...`);
     const tasks = generateTasks(intake);
     const tasksPath = utils.writeArtifact(runId, 'spec', 'task_breakdown.json', tasks);
     console.log(`  ${c.green}✓${c.reset} Saved: ${tasksPath}\n`);
 
-    // Step 7: Generate NEXT_STEPS
+    // Step 7: Security Review (Layer C)
+    console.log(`${c.yellow}[5/7]${c.reset} Security review...`);
+    const securityReview = generateSecurityReview(intake);
+    const securityPath = utils.writeArtifact(runId, 'verification', 'security_review.md', securityReview);
+    console.log(`  ${c.green}✓${c.reset} Saved: ${securityPath}\n`);
+
+    // Step 8: Deploy Kit (Layer C)
+    console.log(`${c.yellow}[6/7]${c.reset} Tạo deploy kit...`);
+    const deployKit = generateDeployKit(intake);
+
+    // Create deploy directory
+    const deployDir = path.join(REPO_ROOT, 'artifacts', 'runs', runId, 'deploy');
+    if (!fs.existsSync(deployDir)) {
+        fs.mkdirSync(deployDir, { recursive: true });
+    }
+
+    fs.writeFileSync(path.join(deployDir, 'Dockerfile'), deployKit.dockerfile);
+    fs.writeFileSync(path.join(deployDir, 'docker-compose.yml'), deployKit.dockerCompose);
+    fs.writeFileSync(path.join(deployDir, 'env.example'), deployKit.envExample);
+    fs.writeFileSync(path.join(deployDir, 'DEPLOY.md'), deployKit.deployMd);
+    console.log(`  ${c.green}✓${c.reset} Saved: ${deployDir}/\n`);
+
+    // Step 9: Generate NEXT_STEPS
+    console.log(`${c.yellow}[7/7]${c.reset} Tạo hướng dẫn...`);
     const nextSteps = generateNextSteps(intake, tasks);
     const nextStepsPath = utils.writeArtifact(runId, 'spec', 'NEXT_STEPS.md', nextSteps);
+    console.log(`  ${c.green}✓${c.reset} Saved: ${nextStepsPath}\n`);
 
     // Summary
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
@@ -687,17 +1015,20 @@ const runVibe = async () => {
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
     console.log(`${c.bold}Các file đã tạo:${c.reset}`);
-    console.log(`  📄 ${specPath}`);
-    console.log(`  📋 ${tasksPath}`);
-    console.log(`  📖 ${nextStepsPath}\n`);
+    console.log(`  📄 spec.md           - Specification chi tiết`);
+    console.log(`  📋 task_breakdown.json - Danh sách công việc`);
+    console.log(`  🔒 security_review.md  - Đánh giá bảo mật`);
+    console.log(`  🐳 deploy/            - Dockerfile + docker-compose`);
+    console.log(`  📖 NEXT_STEPS.md      - Hướng dẫn bước tiếp theo\n`);
 
     console.log(`${c.bold}Bước tiếp theo:${c.reset}`);
     console.log(`  1. Đọc file ${c.cyan}NEXT_STEPS.md${c.reset} để biết cách tiến hành`);
-    console.log(`  2. Gửi file ${c.cyan}spec.md${c.reset} cho developer hoặc AI agent\n`);
+    console.log(`  2. Gửi file ${c.cyan}spec.md${c.reset} cho developer hoặc AI agent`);
+    console.log(`  3. Dùng ${c.cyan}deploy/${c.reset} để deploy khi code xong\n`);
 
     console.log(`${c.dim}Xem chi tiết: npx aat status ${runId}${c.reset}\n`);
 
-    return { runId, intake, spec, tasks };
+    return { runId, intake, spec, tasks, securityReview, deployKit };
 };
 
 // Run
