@@ -45,7 +45,7 @@ repo-root/
 ├── schemas/                     # JSON Schemas
 │   ├── intake.schema.json
 │   ├── research.shortlist.schema.json
-│   ├── search.reuse_assessment.schema.json
+│   ├── research.reuse_assessment.schema.json
 │   ├── debate.inputs_for_spec.schema.json
 │   ├── task_breakdown.schema.json
 │   └── verification.report.schema.json
@@ -65,6 +65,36 @@ repo-root/
 └── artifacts/                   # Run artifacts
     └── runs/<run_id>/
 ```
+
+## Environment Setup
+
+### 1. Copy environment file
+```bash
+cp .env.example .env
+```
+
+### 2. Configure API keys
+
+Edit `.env` and set your keys:
+
+```bash
+# Required for brave-search skill
+BRAVE_API_KEY=your_brave_api_key_here
+
+# Optional - for higher GitHub API rate limits
+GITHUB_TOKEN=your_github_token_here
+```
+
+**Get API keys:**
+- Brave Search: https://brave.com/search/api/
+- GitHub Token: https://github.com/settings/tokens
+
+### 3. Run self-check
+```bash
+node .agent/skills/orchestrator/scripts/selfcheck.js
+```
+
+---
 
 ## Quick Start
 

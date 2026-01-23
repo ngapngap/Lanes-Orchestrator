@@ -1,534 +1,233 @@
-# Báo cáo Phân tích: AI Agent Toolkit Pipeline
+# AI Agent Toolkit - Báo cáo Đánh giá v2
 
-## Tổng quan Yêu cầu
+## Executive Summary
 
-Mục tiêu: Xây dựng **pipeline hoàn chỉnh cho vòng đời dự án** với các skill chuyên biệt, điều phối bởi hệ thống agents.
-
----
-
-## 1. Phân tích Các Repo Tham khảo
-
-### 1.1. BMAD-METHOD (github.com/bmad-code-org/BMAD-METHOD)
-
-**Tổng quan:**
-- Framework phát triển phần mềm AI-driven với 21 agents chuyên biệt
-- 50+ workflows có hướng dẫn
-- Scale-adaptive intelligence (Level 0-4)
-
-**Cấu trúc Modules:**
-| Module | Viết tắt | Mục đích |
-|--------|----------|----------|
-| BMad Method | BMM | Core agile development với 34 workflows qua 4 phases |
-| BMad Builder | BMB | Tạo custom agents và extensions |
-| Creative Intelligence Suite | CIS | Innovation, brainstorming workflows |
-
-**Agents chính:**
-- Product Manager (PM): Requirements, product vision
-- Architect: System design, technical decisions
-- Developer: Implementation
-- UX Designer: User experience
-- Scrum Master: Process facilitation
-
-**4 Phases của BMM:**
-1. **Analysis Phase**: Hiểu requirements và context
-2. **Planning Phase**: Phân chia công việc, prioritization
-3. **Architecture Phase**: Technical design
-4. **Implementation Phase**: Coding, testing, deployment
-
-**Development Tracks:**
-| Track | Dùng cho | Thời gian đến Story đầu |
-|-------|----------|-------------------------|
-| Quick Flow | Bug fixes, small features | ~5 phút |
-| BMad Method | Products and platforms | ~15 phút |
-| Enterprise | Compliance-heavy systems | ~30 phút |
-
-**Điểm học hỏi:**
-- Workflow có cấu trúc rõ ràng theo phases
-- Scale-adaptive: tự điều chỉnh độ phức tạp
-- Just-in-time documentation
-- Human-AI collaboration thay vì automation hoàn toàn
+Bộ kit có **thiết kế kiến trúc tốt** nhưng **implementation chưa align với spec**, dẫn đến không thể chạy full pipeline. Cần fix các lỗi critical trước khi có thể sử dụng production.
 
 ---
 
-### 1.2. UI-UX Pro Max Skill (github.com/nextlevelbuilder/ui-ux-pro-max-skill)
+## 1. So sánh với Repos tương tự trên GitHub
 
-**Tổng quan:**
-- AI skill cho design intelligence
-- 20.7k stars, MIT license
+### Top Competitors
 
-**Capabilities:**
-| Thành phần | Số lượng | Mô tả |
-|------------|----------|-------|
-| Reasoning Rules | 100 | Industry-specific design generation |
-| UI Styles | 57 | Glassmorphism, Neumorphism, Bento Grid, Dark Mode... |
-| Color Palettes | 95 | Industry-specific (SaaS, Healthcare, Fintech...) |
-| Font Pairings | 56 | Google Fonts curated |
-| Chart Types | 24 | Dashboard analytics |
-| Tech Stacks | 11 | React, Next.js, Vue, Svelte, Flutter... |
-| UX Guidelines | 98 | Best practices, anti-patterns, accessibility |
+| Repo | Stars | So sánh |
+|------|-------|---------|
+| **github/spec-kit** | 64K | Foundation SDD - toolkit này build on top |
+| **crewAI** | 43K | General-purpose agents, không có QA gates |
+| **BMAD-METHOD** | 31K | **TRỰC TIẾP CẠNH TRANH** - PRD→Arch→Stories→Dev→QA |
+| **Fission-AI/OpenSpec** | 19K | AI-native spec format |
+| **claude-code-spec-workflow** | 3.3K | Very similar staged pipeline |
 
-**Design System Generation Flow:**
-```
-User Request → Multi-Domain Search (5 parallel) → Reasoning Engine → Complete Design System
-```
+### Unique Differentiators của Toolkit này
 
-1. **Input**: "Build a landing page for my beauty spa"
-2. **Search**: Product type, Style, Colors, Patterns, Typography
-3. **Reasoning**: Match rules, apply priorities, filter anti-patterns
-4. **Output**: Pattern, Style, Colors, Typography, Effects, Anti-patterns, Checklist
+| Feature | BMAD | CrewAI | OpenSpec | **AI-Agent-Toolkit** |
+|---------|------|--------|----------|---------------------|
+| Staged Pipeline | Yes | Flexible | Spec-only | **Yes** |
+| **Debate Stage** | No | No | No | **Yes (Unique)** |
+| **Research Stage** | No | No | No | **Yes (Unique)** |
+| QA Gates | Yes | No | No | **Yes** |
+| Lane-based parallel | No | Yes | No | **Yes** |
+| Schema validation | Partial | No | Yes | **Yes** |
 
-**Industry Categories:**
-- Tech & SaaS, Finance, Healthcare, E-commerce
-- Services (Beauty, Restaurant, Legal...)
-- Creative (Portfolio, Agency, Gaming...)
-- Emerging Tech (Web3, Spatial Computing...)
-
-**Master + Overrides Pattern:**
-```
-design-system/
-├── MASTER.md          # Global Source of Truth
-└── pages/
-    └── dashboard.md   # Page-specific overrides
-```
-
-**Điểm học hỏi:**
-- Reasoning rules theo industry
-- Multi-domain parallel search
-- Persistence với Master/Overrides pattern
-- Pre-delivery checklist tự động
+**Kết luận:** Debate và Research stages là điểm khác biệt chính. Đây là competitive advantage.
 
 ---
 
-## 2. Phân tích Pipeline Yêu cầu
+## 2. Ưu điểm
 
-### 2.1. Các Skills cần xây dựng
+### 2.1 Kiến trúc (9/10)
 
-| # | Skill | Mục đích | Trạng thái |
-|---|-------|----------|------------|
-| 1 | **intake** | Hỏi đáp với user để hiểu rõ yêu cầu | ❌ Chưa làm |
-| 2 | **research** | Tìm repo mẫu, patterns trên GitHub | ❌ Chưa làm |
-| 3 | **spec-kit-creator** | Tạo spec kit chuẩn | ✅ Đã làm |
-| 4 | **orchestrator** | Điều phối agents thực hiện | ✅ Đã làm |
-| 5 | **ui-ux** | Thiết kế UI/UX | ❌ Chưa làm (có thể tích hợp từ ui-ux-pro-max) |
-| 6 | **qa-gate** | Verify: test/lint/build/typecheck | ❌ Chưa làm |
-| 7 | **repo-bootstrap** | Tạo skeleton repo/CI/conventions | ⏳ Optional |
-| 8 | **packager** | Release notes, deploy checklist | ⏳ Optional |
+- **Pipeline rõ ràng**: Intake → Research → Debate → Spec → Design → Code → QA → Debug
+- **Gates enforcement**: 6 gates với điều kiện pass/fail rõ ràng
+- **Lane separation**: ui/api/data/qa/security cho parallel work
+- **Artifact contracts**: Mỗi phase có input/output định nghĩa
+- **Escalation paths**: QA fail → Debug → Spec → Debate → User
 
-### 2.2. Các Agents cần xây dựng
+### 2.2 Documentation (7/10)
 
-| Agent | Dùng Skill | Nhiệm vụ | Output |
-|-------|------------|----------|--------|
-| **Manager Agent** | orchestrator | Điều phối pipeline, checkpoint, go/no-go | Decisions |
-| **Intake Agent** | intake | Thu thập requirements | `intake.md` |
-| **Research Agent** | research | Tìm repo mẫu, patterns | `research/shortlist.json`, `patterns.md` |
-| **Spec Agent** | spec-kit | Tạo specifications | `spec/task_breakdown.json`, acceptance criteria |
-| **UI/UX Agent** | ui-ux | Thiết kế giao diện | `design/handoff.md`, design system |
-| **Lane Agents** | orchestrator | Thực hiện tasks song song | Handoff bundles |
-| **Verifier Agent** | qa-gate | Verify, không sửa feature | `verification/report.json`, `tests.md` |
+- **ORCHESTRATOR_ADAPTER.md**: TypeScript interfaces chuẩn
+- **QA_TRIAGE.md**: Decision tree chi tiết
+- **Agent definitions**: System prompts rõ ràng
+- **Examples**: 6 sample artifacts
 
-### 2.3. Quy trình Pipeline
+### 2.3 Schema Design (7/10)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PIPELINE OVERVIEW                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
-│  │  INTAKE  │───▶│ RESEARCH │───▶│   SPEC   │───▶│  UI/UX   │              │
-│  │  Agent   │    │  Agent   │    │  Agent   │    │  Agent   │              │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
-│       │               │               │               │                     │
-│       ▼               ▼               ▼               ▼                     │
-│   intake.md     shortlist.json   task_breakdown   handoff.md               │
-│                 patterns.md      .json                                      │
-│                                                                              │
-│  ════════════════════════════════════════════════════════════════════════  │
-│                                                                              │
-│                         ┌─────────────┐                                     │
-│                         │   MANAGER   │                                     │
-│                         │    Agent    │                                     │
-│                         └──────┬──────┘                                     │
-│                                │                                            │
-│              ┌─────────────────┼─────────────────┐                         │
-│              ▼                 ▼                 ▼                          │
-│        ┌──────────┐      ┌──────────┐      ┌──────────┐                    │
-│        │ UI Lane  │      │ API Lane │      │Data Lane │                    │
-│        │  Agent   │      │  Agent   │      │  Agent   │                    │
-│        └────┬─────┘      └────┬─────┘      └────┬─────┘                    │
-│             │                 │                 │                           │
-│             ▼                 ▼                 ▼                           │
-│        handoff bundle    handoff bundle    handoff bundle                  │
-│                                                                              │
-│  ════════════════════════════════════════════════════════════════════════  │
-│                                                                              │
-│                         ┌─────────────┐                                     │
-│                         │  VERIFIER   │                                     │
-│                         │    Agent    │                                     │
-│                         └──────┬──────┘                                     │
-│                                │                                            │
-│                                ▼                                            │
-│                    verification/report.json                                 │
-│                    verification/tests.md                                    │
-│                                                                              │
-│  ════════════════════════════════════════════════════════════════════════  │
-│                                                                              │
-│                         ┌─────────────┐                                     │
-│                         │   MANAGER   │                                     │
-│                         │  Decision   │                                     │
-│                         └──────┬──────┘                                     │
-│                                │                                            │
-│              ┌─────────────────┼─────────────────┐                         │
-│              ▼                 ▼                 ▼                          │
-│           MERGE            RETRY            ROLLBACK                        │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+- JSON Schema 2020-12 (modern)
+- `additionalProperties: false` (strict)
+- Enums cho controlled values
+- Provenance tracking
 
-### 2.4. Rule of Thumb - Khi nào gọi skill nào
+### 2.4 Một số Scripts hoạt động tốt
 
-| Tình huống | Skill cần gọi |
-|------------|---------------|
-| User mới đưa ý tưởng mơ hồ | `intake` |
-| User đưa yêu cầu nhưng chưa rõ cách làm | `research` |
-| Đã chốt hướng làm | `spec-kit` |
-| Có UI phức tạp/đòi đẹp/prototype | `ui-ux` |
-| Bắt đầu triển khai song song | `orchestrator` |
-| Trước khi bàn giao/merge | `qa-gate` |
-| Trước khi ship | `packager` |
+- `orchestrator/run-agent.js`: PTY bridge với security hardening
+- `orchestrator/watcher.js`: Real-time log viewer
+- `qa-gate/run-gate.js`: Auto-detect project config
+- `research/search-github.js`: GitHub search với scoring
 
 ---
 
-## 3. Đề xuất Cấu trúc Thư mục
+## 3. Nhược điểm (Critical Issues)
+
+### 3.1 Output Path Mismatch (CRITICAL)
+
+| Script | Hiện tại ghi ra | MASTER yêu cầu |
+|--------|-----------------|----------------|
+| intake | `output/intake/intake.md` | `artifacts/runs/<run_id>/10_intake/intake.json` |
+| research | `output/research/*` | `artifacts/runs/<run_id>/20_research/*` |
+| qa-gate | `output/verification/*` | `artifacts/runs/<run_id>/60_verification/*` |
+| ui-ux | `output/design/*` | `artifacts/runs/<run_id>/45_design/*` |
+
+**Impact:** Pipeline không thể chạy vì artifacts ở sai chỗ.
+
+### 3.2 Format Mismatch (CRITICAL)
+
+| Issue | Chi tiết |
+|-------|----------|
+| Intake | Tạo Markdown, nhưng spec-agent expect JSON |
+| QA Report | Script tạo format khác với schema |
+
+**Impact:** Các phase không đọc được output của phase trước.
+
+### 3.3 Naming Inconsistency (HIGH)
 
 ```
-ai-agent-toolkit/
-├── .agent/
-│   ├── skills/
-│   │   ├── intake/                    # Skill 1: Thu thập requirements
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   └── scripts/
-│   │   │       └── interview.js       # Interactive Q&A
-│   │   │
-│   │   ├── research/                  # Skill 2: Tìm repo mẫu
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   └── scripts/
-│   │   │       ├── search-github.js   # GitHub API search
-│   │   │       └── analyze-repo.js    # Phân tích repo
-│   │   │
-│   │   ├── spec-kit-creator/          # Skill 3: Tạo specs ✅
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   └── scripts/
-│   │   │
-│   │   ├── orchestrator/              # Skill 4: Điều phối ✅
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   └── scripts/
-│   │   │
-│   │   ├── ui-ux/                     # Skill 5: Thiết kế UI/UX
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   ├── reasoning-rules/       # 100 rules theo industry
-│   │   │   ├── styles/                # 57 UI styles
-│   │   │   ├── palettes/              # 95 color palettes
-│   │   │   ├── typography/            # 56 font pairings
-│   │   │   └── scripts/
-│   │   │       └── generate-design.js
-│   │   │
-│   │   ├── qa-gate/                   # Skill 6: Verification
-│   │   │   ├── SKILL.md
-│   │   │   ├── README.md
-│   │   │   └── scripts/
-│   │   │       ├── run-tests.js
-│   │   │       ├── run-lint.js
-│   │   │       ├── run-build.js
-│   │   │       └── generate-report.js
-│   │   │
-│   │   ├── repo-bootstrap/            # Skill 7: Skeleton repo (Optional)
-│   │   │   └── ...
-│   │   │
-│   │   └── packager/                  # Skill 8: Release (Optional)
-│   │       └── ...
-│   │
-│   ├── agents/                        # Agent configurations
-│   │   ├── manager.md                 # Manager Agent rules
-│   │   ├── intake-agent.md
-│   │   ├── research-agent.md
-│   │   ├── spec-agent.md
-│   │   ├── ui-ux-agent.md
-│   │   ├── lane-agents/
-│   │   │   ├── ui-lane.md
-│   │   │   ├── api-lane.md
-│   │   │   ├── data-lane.md
-│   │   │   └── qa-lane.md
-│   │   └── verifier-agent.md
-│   │
-│   ├── workflows/
-│   │   ├── full-pipeline.md           # Complete workflow
-│   │   ├── quick-flow.md              # Bug fixes, small features
-│   │   └── enterprise.md              # Compliance-heavy
-│   │
-│   └── logs/                          # Runtime logs
-│
-├── output/                            # Pipeline outputs
-│   ├── intake/
-│   │   └── intake.md
-│   ├── research/
-│   │   ├── shortlist.json
-│   │   └── patterns.md
-│   ├── spec/
-│   │   ├── task_breakdown.json
-│   │   └── features/
-│   ├── design/
-│   │   ├── MASTER.md
-│   │   └── pages/
-│   └── verification/
-│       ├── report.json
-│       └── tests.md
-│
-├── README.md
-├── AGENTS.md                          # Hướng dẫn cho AI agents
-└── mota.md                            # Yêu cầu gốc
+Schema file:  schemas/search.reuse_assessment.schema.json
+Doc/examples: research.reuse_assessment.*
+```
+
+**Impact:** Confusing, dễ bị lỗi validation.
+
+### 3.4 Missing Environment Setup (HIGH)
+
+- Không có `.env.example`
+- Không có hướng dẫn setup API keys
+- Scripts fail silently khi thiếu keys
+
+### 3.5 No Orchestrator Implementation (CRITICAL)
+
+- `runPipeline()` - không có
+- `evaluateGate()` - không có
+- Inter-agent state management - không có
+- Run folder initialization - không có
+
+### 3.6 Code Quality Issues (MEDIUM)
+
+```javascript
+// Hardcoded paths (brittle)
+const OUTPUT_DIR = path.resolve(__dirname, '../../../../output/intake');
+
+// No rate limit handling
+// GitHub API will fail after 60 req/hour without token
+
+// shell: true vulnerability
+spawnSync(command, [], { shell: true, ... });
 ```
 
 ---
 
-## 4. Chi tiết từng Skill cần xây dựng
+## 4. Scorecard
 
-### 4.1. Intake Skill
-
-**Mục đích:** Thu thập requirements từ user một cách có cấu trúc
-
-**Workflow:**
-1. Hỏi về loại dự án (web, mobile, API, CLI...)
-2. Hỏi về target users
-3. Hỏi về core features
-4. Hỏi về constraints (timeline, budget, tech stack...)
-5. Hỏi về existing codebase (nếu có)
-6. Tổng hợp thành `intake.md`
-
-**Output format:**
-```markdown
-# Intake: [Project Name]
-
-## Project Type
-- Category: [Web App / Mobile / API / CLI / Library]
-- Scale: [MVP / Product / Enterprise]
-
-## Target Users
-- Primary: [description]
-- Secondary: [description]
-
-## Core Features
-1. [Feature 1]
-2. [Feature 2]
-
-## Constraints
-- Timeline: [estimate]
-- Tech Stack: [requirements]
-- Budget: [if relevant]
-
-## Existing Context
-- Codebase: [Yes/No, details]
-- Design: [Yes/No, details]
-
-## Questions for Clarification
-- [Open question 1]
-- [Open question 2]
-```
-
-### 4.2. Research Skill
-
-**Mục đích:** Tìm repo mẫu và patterns trước khi triển khai
-
-**Workflow:**
-1. Parse requirements từ `intake.md`
-2. Tạo search queries cho GitHub API
-3. Tìm và rank repos theo relevance
-4. Phân tích top repos (structure, patterns, technologies)
-5. Tổng hợp thành `shortlist.json` và `patterns.md`
-
-**Output format:**
-
-`shortlist.json`:
-```json
-{
-  "query": "original search query",
-  "timestamp": "2024-01-22T00:00:00Z",
-  "repos": [
-    {
-      "name": "owner/repo",
-      "url": "https://github.com/...",
-      "stars": 1000,
-      "description": "...",
-      "relevance_score": 0.95,
-      "technologies": ["React", "TypeScript"],
-      "patterns_found": ["monorepo", "feature-based structure"],
-      "notes": "Good example for..."
-    }
-  ]
-}
-```
-
-`patterns.md`:
-```markdown
-# Research Patterns
-
-## Recommended Architecture
-- Pattern: [name]
-- Source: [repo link]
-- Reason: [why this fits]
-
-## Technology Stack
-- Frontend: [recommendation]
-- Backend: [recommendation]
-- Database: [recommendation]
-
-## Code Patterns
-1. [Pattern 1]: [description, source]
-2. [Pattern 2]: [description, source]
-
-## Anti-patterns to Avoid
-1. [Anti-pattern 1]: [reason]
-```
-
-### 4.3. UI-UX Skill
-
-**Mục đích:** Generate design system và UI guidelines
-
-**Approach:** Tích hợp hoặc lấy cảm hứng từ `ui-ux-pro-max-skill`
-
-**Key Components:**
-- Reasoning rules theo industry (100+ rules)
-- Style library (57+ styles)
-- Color palettes (95+ palettes)
-- Typography pairings (56+ pairings)
-- UX guidelines (98+ rules)
-
-**Output:**
-- `design/MASTER.md`: Design system chính
-- `design/pages/*.md`: Page-specific overrides
-- `design/handoff.md`: Developer handoff document
-
-### 4.4. QA-Gate Skill
-
-**Mục đích:** Verify code quality, không sửa feature
-
-**Workflow:**
-1. Run test suite → capture results
-2. Run linter → capture warnings/errors
-3. Run build → verify success
-4. Run typecheck (nếu TypeScript) → capture errors
-5. Generate consolidated report
-
-**Output:**
-
-`verification/report.json`:
-```json
-{
-  "timestamp": "2024-01-22T00:00:00Z",
-  "overall_status": "pass|fail|warning",
-  "checks": {
-    "tests": {
-      "status": "pass",
-      "total": 100,
-      "passed": 98,
-      "failed": 2,
-      "skipped": 0
-    },
-    "lint": {
-      "status": "warning",
-      "errors": 0,
-      "warnings": 5
-    },
-    "build": {
-      "status": "pass",
-      "duration_ms": 5000
-    },
-    "typecheck": {
-      "status": "pass",
-      "errors": 0
-    }
-  },
-  "blocking_issues": [],
-  "recommendations": []
-}
-```
+| Category | Score | Notes |
+|----------|-------|-------|
+| Architecture Design | 9/10 | Excellent conceptual design |
+| Agent Definitions | 7/10 | Clear specs, no execution code |
+| Skills Implementation | 4/10 | Output paths wrong, format mismatch |
+| Schema Validation | 6/10 | Good schemas, naming issues |
+| Documentation | 7/10 | Good structure, missing setup guides |
+| Practical Usability | 3/10 | Cannot run full pipeline |
+| Code Quality | 5/10 | Hardcoded paths, security concerns |
+| **Overall** | **5.5/10** | Strong foundation, needs major fixes |
 
 ---
 
-## 5. So sánh với BMAD-METHOD
+## 5. Cần Cải thiện (Priority Order)
 
-| Aspect | BMAD-METHOD | AI Agent Toolkit (đề xuất) |
-|--------|-------------|----------------------------|
-| **Scope** | 21 agents, 50+ workflows | 7-8 agents, ~10 workflows |
-| **Complexity** | Enterprise-grade, 4 levels | Simplified, 2-3 levels |
-| **Focus** | Full agile methodology | Pipeline automation |
-| **Installation** | npm package | Local skills |
-| **Customization** | BMad Builder module | Direct skill editing |
+### P0 - Critical (Chặn pipeline hoàn toàn)
 
-**Điểm khác biệt chính:**
-1. BMAD phức tạp hơn nhiều → Toolkit này đơn giản hơn, dễ customize
-2. BMAD có CLI riêng → Toolkit này chạy trên Claude Code/agents có sẵn
-3. BMAD focus agile methodology → Toolkit này focus pipeline automation
+| # | Task | Files affected |
+|---|------|----------------|
+| 1 | Fix output paths trong tất cả scripts | intake, research, qa-gate, ui-ux |
+| 2 | Intake: output JSON thay vì Markdown | start-intake.js |
+| 3 | QA Gate: align report format với schema | run-gate.js |
+| 4 | Rename schema file | search.reuse_assessment → research.reuse_assessment |
+| 5 | Thêm .env.example | repo root |
+| 6 | Update selfcheck.js | orchestrator/scripts |
 
----
+### P1 - High (Chặn production use)
 
-## 6. Kế hoạch Triển khai
+| # | Task | Description |
+|---|------|-------------|
+| 7 | Implement orchestrator loop | runPipeline(), evaluateGate() |
+| 8 | Add run folder initialization | Create artifacts/runs/<id>/ structure |
+| 9 | Add package.json to all skills | Enable npm install |
+| 10 | Fix shell: true vulnerabilities | qa-gate, orchestrator |
 
-### Phase 1: Core Skills (Ưu tiên cao)
-1. ✅ `spec-kit-creator` - Đã hoàn thành
-2. ✅ `orchestrator` - Đã hoàn thành
-3. ❌ `intake` - Cần làm
-4. ❌ `research` - Cần làm
-5. ❌ `qa-gate` - Cần làm
+### P2 - Medium (Quality of life)
 
-### Phase 2: Enhancement Skills
-6. ❌ `ui-ux` - Tích hợp từ ui-ux-pro-max hoặc build mới
+| # | Task | Description |
+|---|------|-------------|
+| 11 | Add installation script | One-command setup |
+| 12 | Create end-to-end tutorial | Step-by-step walkthrough |
+| 13 | Standardize on English | Remove mixed language |
+| 14 | Add CLI entry point | npx ai-agent-toolkit run |
+| 15 | Add rate limit handling | GitHub API |
 
-### Phase 3: Optional Skills
-7. ⏳ `repo-bootstrap`
-8. ⏳ `packager`
+### P3 - Low (Nice to have)
 
-### Phase 4: Agent Configurations
-9. Tạo agent definitions trong `.agent/agents/`
-10. Tạo workflow definitions trong `.agent/workflows/`
-
----
-
-## 7. Khuyến nghị
-
-### 7.1. Ưu tiên làm trước
-1. **intake** - Quan trọng nhất để tránh spec đoán mò
-2. **qa-gate** - Đảm bảo chất lượng output
-3. **research** - Tiết kiệm thời gian triển khai
-
-### 7.2. Tích hợp ui-ux-pro-max
-- Có thể fork/adapt reasoning rules
-- Sử dụng pattern Master + Overrides
-- Customize cho tech stack cụ thể
-
-### 7.3. Giữ đơn giản
-- Không cần 21 agents như BMAD
-- Focus vào pipeline chính: Intake → Research → Spec → Build → Verify
-- Thêm complexity sau khi core hoạt động tốt
+| # | Task | Description |
+|---|------|-------------|
+| 16 | Add more schemas | patterns.md, onepager.md, handoff bundles |
+| 17 | Add troubleshooting guide | Common errors |
+| 18 | Add API documentation | JSDoc for all functions |
 
 ---
 
-## 8. Kết luận
+## 6. Recommended Next Steps
 
-Yêu cầu xây dựng một **pipeline hoàn chỉnh cho vòng đời dự án** là khả thi và có giá trị. Bằng cách:
+### Immediate (Today)
 
-1. **Học hỏi từ BMAD-METHOD**: Cấu trúc phases, scale-adaptive approach
-2. **Tích hợp ui-ux-pro-max**: Reasoning rules, design system generation
-3. **Build trên nền orchestrator**: Đã có sẵn lanes framework
+1. Fix output paths + format alignment
+2. Add .env.example + selfcheck
+3. Rename schema file
 
-Pipeline này sẽ giúp:
-- Giảm thời gian từ ý tưởng → code
-- Tránh spec đoán mò nhờ intake + research
-- Đảm bảo chất lượng qua qa-gate
-- Cho phép làm việc song song qua orchestrator lanes
+### Short-term (This week)
 
-**Next step:** Triển khai `intake` skill để hoàn thiện đầu pipeline.
+4. Implement basic orchestrator loop
+5. Add run initialization script
+6. Create minimal working demo
+
+### Medium-term (This month)
+
+7. Full LLM integration
+8. End-to-end tutorial
+9. npm publish
+
+---
+
+## 7. Competitive Position
+
+**Strengths vs BMAD-METHOD:**
+- Debate stage (unique)
+- Research stage with reuse-first approach (unique)
+- More granular schema validation
+
+**Weaknesses vs BMAD-METHOD:**
+- BMAD has working implementation
+- BMAD has larger community (31K stars)
+- BMAD has better documentation
+
+**Recommendation:** Focus on making the unique features (Debate, Research) actually work. This is the differentiation.
+
+---
+
+## 8. Conclusion
+
+Bộ kit có **thiết kế rất tốt** với những ý tưởng độc đáo (Debate, Research stages). Tuy nhiên, **implementation chưa hoàn thiện** - docs đúng nhưng code sai.
+
+**Priority #1:** Align code với docs (output paths, formats, naming).
+
+Sau khi fix P0 issues, toolkit sẽ có thể cạnh tranh với BMAD-METHOD nhờ unique features.
+
+---
+
+*Report generated: 2026-01-23*

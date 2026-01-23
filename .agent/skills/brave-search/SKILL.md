@@ -4,7 +4,25 @@
 Web search skill using Brave Search API for research phase.
 
 ## Requirements
-- `BRAVE_API_KEY` environment variable
+
+### Environment Variable (Required)
+```bash
+BRAVE_API_KEY=your_brave_api_key_here
+```
+
+**Get your API key at:** https://brave.com/search/api/
+
+### Setup
+1. Copy `.env.example` to `.env` in repo root
+2. Set `BRAVE_API_KEY` in `.env`
+3. Run `node .agent/skills/orchestrator/scripts/selfcheck.js` to verify
+
+## Fallback Behavior
+
+When `BRAVE_API_KEY` is not set:
+- Script returns mock results with warning
+- Pipeline can continue using GitHub search as alternative
+- Manual input also accepted
 
 ## Usage
 
