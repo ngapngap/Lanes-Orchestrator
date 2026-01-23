@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
  * Run QA Gate Script
- * Chạy tất cả verification checks
+ * Chạy tất cả verification checks với AutoFix support
  *
  * Outputs to: artifacts/runs/<run_id>/60_verification/
+ *
+ * AutoFix Rules:
+ * - Only fix implementation bugs, config issues, docker issues
+ * - Never change spec files (intake.json, spec.md, debate.inputs_for_spec.json)
+ * - Max 2 autofix retries
+ * - If not fixable within spec, create Change Request
  */
 
 const fs = require('fs');
@@ -64,6 +70,151 @@ const parseArgs = () => {
 
 const options = parseArgs();
 const RUN_ID = options.runId || process.env.RUN_ID || utils.getLatestRunId();
+
+// AutoFix configuration
+const AUTOFIX_MAX_RETRIES = 2;
+
+// Protected files (source of truth - never modify in autofix)
+const PROTECTED_FILES = [
+    '10_intake/intake.json',
+    '40_spec/spec.md',
+    '30_debate/debate.inputs_for_spec.json'
+];
+
+/**
+ * Triage failure - determine if fixable within spec
+ */
+const triageFailure = (check, error, output) => {
+    const fullOutput = `${error} ${output}`.toLowerCase();
+
+    // Patterns that indicate fixable issues
+    const fixablePatterns = [
+        { pattern: /typeerror|referenceerror|syntaxerror/i, category: 'implementation_bug' },
+        { pattern: /cannot find module|module not found/i, category: 'missing_dependency' },
+        { pattern: /enoent|econnrefused|eaddrinuse/i, category: 'config_issue' },
+        { pattern: /docker|container|dockerfile/i, category: 'docker_issue' },
+        { pattern: /expected.*but got|assertion.*failed/i, category: 'test_mismatch' },
+        { pattern: /undefined is not|null is not/i, category: 'implementation_bug' },
+        { pattern: /import.*failed|require.*failed/i, category: 'missing_dependency' },
+        { pattern: /port.*already|address already/i, category: 'config_issue' },
+    ];
+
+    // Patterns that indicate spec change required
+    const notFixablePatterns = [
+        { pattern: /scope|requirement|specification/i, category: 'scope_mismatch' },
+        { pattern: /security|vulnerability|cve/i, category: 'security_blocker' },
+        { pattern: /architecture|design|infeasible/i, category: 'architecture_issue' },
+        { pattern: /api.*changed|breaking.*change/i, category: 'external_dependency' },
+        { pattern: /deprecated.*removed|no longer.*supported/i, category: 'external_dependency' },
+    ];
+
+    for (const { pattern, category } of fixablePatterns) {
+        if (pattern.test(fullOutput)) {
+            return {
+                fixable: true,
+                category,
+                reason: `Detected ${category.replace(/_/g, ' ')}`,
+                suggestion: getSuggestionForCategory(category, check)
+            };
+        }
+    }
+
+    for (const { pattern, category } of notFixablePatterns) {
+        if (pattern.test(fullOutput)) {
+            return {
+                fixable: false,
+                category,
+                reason: `Detected ${category.replace(/_/g, ' ')} - requires spec change`,
+                suggestion: null
+            };
+        }
+    }
+
+    // Default: assume fixable for unknown errors
+    return {
+        fixable: true,
+        category: 'unknown',
+        reason: 'Unknown error - attempting fix',
+        suggestion: `Review ${check} output and fix implementation`
+    };
+};
+
+/**
+ * Get suggestion for fixable category
+ */
+const getSuggestionForCategory = (category, check) => {
+    const suggestions = {
+        'implementation_bug': `Fix the ${check} implementation error`,
+        'missing_dependency': 'Install missing dependencies (npm install)',
+        'config_issue': 'Check configuration files and environment variables',
+        'docker_issue': 'Fix Dockerfile or docker-compose configuration',
+        'test_mismatch': 'Update test to match implementation or fix implementation',
+        'unknown': `Review ${check} output and fix accordingly`
+    };
+    return suggestions[category] || suggestions['unknown'];
+};
+
+/**
+ * Generate Change Request when spec change is needed
+ */
+const generateChangeRequest = (check, error, triage, report) => {
+    const timestamp = new Date().toISOString();
+
+    return {
+        id: `CR-${Date.now()}`,
+        timestamp,
+        check,
+        category: triage.category,
+        blocking_error: error.slice(0, 500),
+        reason: triage.reason,
+        options: [
+            {
+                id: 'A',
+                description: 'Modify specification to accommodate current limitation',
+                impact: 'Scope change required'
+            },
+            {
+                id: 'B',
+                description: 'Find alternative implementation approach',
+                impact: 'May require more development time'
+            },
+            {
+                id: 'C',
+                description: 'Remove the blocking feature from MVP',
+                impact: 'Reduced scope'
+            }
+        ],
+        status: 'pending_user_approval',
+        markdown: `## Change Request
+
+**ID:** CR-${Date.now()}
+**Check:** ${check}
+**Category:** ${triage.category.replace(/_/g, ' ')}
+
+### Lỗi chặn hoàn thành:
+\`\`\`
+${error.slice(0, 500)}
+\`\`\`
+
+### Vì sao không thể fix trong scope hiện tại:
+${triage.reason}
+
+### Đề xuất thay đổi:
+- **Option A:** Modify specification to accommodate current limitation
+- **Option B:** Find alternative implementation approach
+- **Option C:** Remove the blocking feature from MVP
+
+### Tác động:
+- Scope: Có thể thay đổi
+- Timeline: Có thể kéo dài
+- Security: Cần đánh giá lại
+
+---
+
+⚠️ **Cần user approval để tiếp tục.**
+`
+    };
+};
 
 // Detect project configuration
 const detectConfig = (projectPath) => {
@@ -199,7 +350,7 @@ const runQAGate = async () => {
     console.log(`  Package Manager: ${config.packageManager}\n`);
 
     const report = {
-        version: '1.0',
+        version: '1.1',
         run_id: RUN_ID || null,
         timestamp: new Date().toISOString(),
         project: {
@@ -207,14 +358,24 @@ const runQAGate = async () => {
             path: projectPath
         },
         overall_status: 'pending',
+        autofix: {
+            enabled: true,
+            max_retries: AUTOFIX_MAX_RETRIES,
+            current_retry: 0,
+            protected_files: PROTECTED_FILES
+        },
         summary: {
             total_checks: 0,
             passed: 0,
             failed: 0,
-            warnings: 0
+            warnings: 0,
+            fixable_within_spec: 0,
+            requires_spec_change: 0
         },
         checks: {},
         blocking_issues: [],
+        triage_results: [],
+        change_requests: [],
         recommendations: []
     };
 
@@ -238,11 +399,27 @@ const runQAGate = async () => {
         } else {
             report.summary.failed++;
             console.log(`  [FAIL] ${parsed.failed} tests failed\n`);
+
+            // Triage the failure
+            const triage = triageFailure('tests', result.stderr, result.stdout);
+            report.triage_results.push({ check: 'tests', ...triage });
+
+            if (triage.fixable) {
+                report.summary.fixable_within_spec++;
+                console.log(`  [TRIAGE] Fixable: ${triage.category} - ${triage.suggestion}\n`);
+            } else {
+                report.summary.requires_spec_change++;
+                const cr = generateChangeRequest('tests', result.stderr, triage, report);
+                report.change_requests.push(cr);
+                console.log(`  [TRIAGE] Requires spec change: ${triage.category}\n`);
+            }
+
             report.blocking_issues.push({
                 check: 'tests',
                 severity: 'error',
                 message: `${parsed.failed} tests failed`,
-                action: 'Fix failing tests before merge'
+                triage: triage,
+                action: triage.fixable ? triage.suggestion : 'Create Change Request'
             });
         }
     }
@@ -294,11 +471,27 @@ const runQAGate = async () => {
         } else {
             report.summary.failed++;
             console.log(`  [FAIL] ${errorCount} type errors\n`);
+
+            // Triage the failure
+            const triage = triageFailure('typecheck', result.stderr, result.stdout);
+            report.triage_results.push({ check: 'typecheck', ...triage });
+
+            if (triage.fixable) {
+                report.summary.fixable_within_spec++;
+                console.log(`  [TRIAGE] Fixable: ${triage.category}\n`);
+            } else {
+                report.summary.requires_spec_change++;
+                const cr = generateChangeRequest('typecheck', result.stderr, triage, report);
+                report.change_requests.push(cr);
+                console.log(`  [TRIAGE] Requires spec change: ${triage.category}\n`);
+            }
+
             report.blocking_issues.push({
                 check: 'typecheck',
                 severity: 'error',
                 message: `${errorCount} TypeScript errors`,
-                action: 'Fix type errors before merge'
+                triage: triage,
+                action: triage.fixable ? triage.suggestion : 'Create Change Request'
             });
         }
     }
@@ -322,11 +515,27 @@ const runQAGate = async () => {
         } else {
             report.summary.failed++;
             console.log('  [FAIL] Build failed\n');
+
+            // Triage the failure
+            const triage = triageFailure('build', result.stderr, result.stdout);
+            report.triage_results.push({ check: 'build', ...triage });
+
+            if (triage.fixable) {
+                report.summary.fixable_within_spec++;
+                console.log(`  [TRIAGE] Fixable: ${triage.category}\n`);
+            } else {
+                report.summary.requires_spec_change++;
+                const cr = generateChangeRequest('build', result.stderr, triage, report);
+                report.change_requests.push(cr);
+                console.log(`  [TRIAGE] Requires spec change: ${triage.category}\n`);
+            }
+
             report.blocking_issues.push({
                 check: 'build',
                 severity: 'error',
                 message: 'Build failed',
-                action: 'Fix build errors'
+                triage: triage,
+                action: triage.fixable ? triage.suggestion : 'Create Change Request'
             });
         }
     }
@@ -349,6 +558,14 @@ const runQAGate = async () => {
         const markdown = generateMarkdownReport(report);
         const summaryPath = utils.writeArtifact(RUN_ID, 'verification', 'summary.md', markdown);
 
+        // Save change requests separately if any
+        if (report.change_requests.length > 0) {
+            const crPath = utils.writeArtifact(RUN_ID, 'verification', 'change_requests.json', report.change_requests);
+            const crMd = report.change_requests.map(cr => cr.markdown).join('\n\n---\n\n');
+            utils.writeArtifact(RUN_ID, 'verification', 'CHANGE_REQUEST.md', crMd);
+            console.log(`\n[!] Change Requests saved - requires user approval`);
+        }
+
         console.log(`\n[OK] Reports saved to:`);
         console.log(`  - ${reportPath}`);
         console.log(`  - ${summaryPath}`);
@@ -363,10 +580,20 @@ const runQAGate = async () => {
     console.log('========================================\n');
     console.log(`Overall Status: ${report.overall_status.toUpperCase()}`);
     console.log(`Checks: ${report.summary.passed}/${report.summary.total_checks} passed`);
+
+    if (report.summary.fixable_within_spec > 0) {
+        console.log(`\nAutoFix Eligible: ${report.summary.fixable_within_spec} issues (fixable within spec)`);
+    }
+    if (report.summary.requires_spec_change > 0) {
+        console.log(`\n⚠️  Requires Spec Change: ${report.summary.requires_spec_change} issues`);
+        console.log(`   See: artifacts/runs/latest/60_verification/CHANGE_REQUEST.md`);
+    }
+
     if (report.blocking_issues.length > 0) {
         console.log('\nBlocking Issues:');
         report.blocking_issues.forEach(issue => {
-            console.log(`  - [${issue.check}] ${issue.message}`);
+            const triageInfo = issue.triage ? ` [${issue.triage.fixable ? 'fixable' : 'needs CR'}]` : '';
+            console.log(`  - [${issue.check}] ${issue.message}${triageInfo}`);
         });
     }
 
