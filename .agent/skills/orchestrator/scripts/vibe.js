@@ -119,45 +119,229 @@ const ask = (rl, question) => new Promise(resolve => {
     rl.question(question, answer => resolve(answer.trim()));
 });
 
-// The 6 vibe questions (enhanced for production-ready output)
-const VIBE_QUESTIONS = [
-    {
+// ============================================
+// Project Type Classification
+// ============================================
+
+const PROJECT_TYPES = {
+    cli: {
+        id: 'cli',
+        name: 'Command-Line Application',
+        patterns: [
+            /\bcli\b/i, /\bcommand[- ]?line\b/i, /\bconsole\b/i, /\bterminal\b/i,
+            /\bargparse\b/i, /\bclick\b/i, /\btyper\b/i, /\bcobra\b/i,
+            /\bscript\b/i, /\bbatch\b/i, /\bshell\b/i
+        ],
+        defaults: {
+            platform: 'cli',
+            auth: 'none',
+            data_sensitivity: 'none',
+            deploy: 'pip/npm package'
+        },
+        questions: ['goal', 'features', 'language', 'deploy']
+    },
+    api: {
+        id: 'api',
+        name: 'REST/GraphQL API',
+        patterns: [
+            /\bapi\b/i, /\brest\b/i, /\bgraphql\b/i, /\bendpoint/i,
+            /\bbackend\b/i, /\bserver\b/i, /\bmicroservice/i
+        ],
+        defaults: {
+            platform: 'api',
+            auth: 'api-key',
+            data_sensitivity: 'depends',
+            deploy: 'Docker'
+        },
+        questions: ['goal', 'features', 'auth', 'data_sensitivity', 'deploy']
+    },
+    library: {
+        id: 'library',
+        name: 'Library/Package',
+        patterns: [
+            /\blibrary\b/i, /\bpackage\b/i, /\bmodule\b/i, /\bsdk\b/i,
+            /\bnpm\b/i, /\bpip\b/i, /\bnuget\b/i, /\bcrate\b/i, /\bgem\b/i
+        ],
+        defaults: {
+            platform: 'library',
+            auth: 'none',
+            data_sensitivity: 'none',
+            deploy: 'package registry'
+        },
+        questions: ['goal', 'features', 'language']
+    },
+    mobile: {
+        id: 'mobile',
+        name: 'Mobile Application',
+        patterns: [
+            /\bmobile\b/i, /\bios\b/i, /\bandroid\b/i, /\bapp store\b/i,
+            /\breact native\b/i, /\bflutter\b/i, /\bswift\b/i, /\bkotlin\b/i
+        ],
+        defaults: {
+            platform: 'mobile',
+            auth: 'email',
+            data_sensitivity: 'personal info',
+            deploy: 'App Store/Play Store'
+        },
+        questions: ['goal', 'features', 'platform', 'auth', 'data_sensitivity', 'deploy']
+    },
+    web: {
+        id: 'web',
+        name: 'Web Application',
+        patterns: [
+            /\bweb\b/i, /\bwebsite\b/i, /\bfrontend\b/i, /\bfull[- ]?stack\b/i,
+            /\breact\b/i, /\bvue\b/i, /\bangular\b/i, /\bnext\.?js\b/i,
+            /\bdashboard\b/i, /\bportal\b/i, /\bsaas\b/i
+        ],
+        defaults: {
+            platform: 'web responsive',
+            auth: 'email',
+            data_sensitivity: 'personal info',
+            deploy: 'Vercel'
+        },
+        questions: ['goal', 'features', 'platform', 'auth', 'data_sensitivity', 'deploy']
+    }
+};
+
+// Language detection for CLI/library projects
+const LANGUAGE_PATTERNS = {
+    python: [/\bpython\b/i, /\bpy\b/i, /\bpip\b/i, /\bdjango\b/i, /\bflask\b/i, /\bfastapi\b/i],
+    node: [/\bnode\b/i, /\bjavascript\b/i, /\btypescript\b/i, /\bnpm\b/i, /\bjs\b/i, /\bts\b/i],
+    dotnet: [/\b\.net\b/i, /\bc#\b/i, /\bcsharp\b/i, /\bdotnet\b/i, /\bnuget\b/i, /\brazor\b/i],
+    go: [/\bgo\b/i, /\bgolang\b/i],
+    rust: [/\brust\b/i, /\bcargo\b/i],
+    java: [/\bjava\b/i, /\bspring\b/i, /\bmaven\b/i, /\bgradle\b/i]
+};
+
+/**
+ * Detect project type from description
+ */
+const detectProjectType = (description) => {
+    if (!description) return PROJECT_TYPES.web;
+
+    const text = description.toLowerCase();
+
+    // Check each project type
+    for (const [typeId, typeInfo] of Object.entries(PROJECT_TYPES)) {
+        for (const pattern of typeInfo.patterns) {
+            if (pattern.test(text)) {
+                return typeInfo;
+            }
+        }
+    }
+
+    // Default to web
+    return PROJECT_TYPES.web;
+};
+
+/**
+ * Detect programming language from description
+ */
+const detectLanguage = (description) => {
+    if (!description) return null;
+
+    for (const [lang, patterns] of Object.entries(LANGUAGE_PATTERNS)) {
+        for (const pattern of patterns) {
+            if (pattern.test(description)) {
+                return lang;
+            }
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Check if description explicitly says "no X"
+ */
+const detectExplicitNegations = (description) => {
+    if (!description) return {};
+
+    const negations = {};
+    const text = description.toLowerCase();
+
+    // No auth patterns
+    if (/\bno\s+(auth|authentication|login)\b/i.test(text) ||
+        /\bwithout\s+(auth|authentication|login)\b/i.test(text)) {
+        negations.auth = 'none';
+    }
+
+    // No database patterns
+    if (/\bno\s+(database|db|storage)\b/i.test(text) ||
+        /\bwithout\s+(database|db|storage)\b/i.test(text)) {
+        negations.database = 'none';
+    }
+
+    // No UI patterns (for API/CLI)
+    if (/\bno\s+(ui|frontend|interface)\b/i.test(text)) {
+        negations.ui = 'none';
+    }
+
+    return negations;
+};
+
+// ============================================
+// Dynamic Questions based on Project Type
+// ============================================
+
+const BASE_QUESTIONS = {
+    goal: {
         id: 'goal',
         question: '1. Mục tiêu chính là gì và ai sẽ dùng?',
-        example: 'VD: App đặt lịch cho tiệm nail, khách hàng dùng để đặt lịch online',
+        example: 'VD: Tool quản lý file cho developers',
         required: true
     },
-    {
+    features: {
         id: 'features',
-        question: '2. MVP cần 3-7 chức năng nào? (liệt kê, cách nhau bằng dấu phẩy)',
-        example: 'VD: đăng ký, đăng nhập, xem dịch vụ, đặt lịch, nhận thông báo',
+        question: '2. MVP cần những chức năng nào? (liệt kê, cách nhau bằng dấu phẩy)',
+        example: 'VD: list files, search, filter by type',
         required: true
     },
-    {
+    language: {
+        id: 'language',
+        question: '3. Ngôn ngữ lập trình?',
+        example: 'VD: Python, Node.js, Go, Rust, C#',
+        default: 'Python'
+    },
+    platform: {
         id: 'platform',
         question: '3. Nền tảng: web, mobile app, hay cả hai?',
-        example: 'VD: web responsive (xem được trên điện thoại)',
+        example: 'VD: web responsive',
         default: 'web responsive'
     },
-    {
+    auth: {
         id: 'auth',
-        question: '4. Cần đăng nhập không? (Google/email/số điện thoại/không cần)',
-        example: 'VD: đăng nhập bằng số điện thoại',
-        default: 'email'
+        question: '4. Cần đăng nhập không? (Google/email/API key/không cần)',
+        example: 'VD: không cần',
+        default: 'none'
     },
-    {
+    data_sensitivity: {
         id: 'data_sensitivity',
         question: '5. Dữ liệu nhạy cảm? (thông tin cá nhân/thanh toán/y tế/không có)',
-        example: 'VD: có thông tin cá nhân khách hàng, không có thanh toán',
-        default: 'thông tin cá nhân cơ bản'
+        example: 'VD: không có',
+        default: 'none'
     },
-    {
+    deploy: {
         id: 'deploy',
-        question: '6. Deploy ở đâu? (Vercel/Docker/VPS/chưa biết)',
-        example: 'VD: Vercel (free), hoặc Docker trên VPS',
+        question: '6. Deploy ở đâu?',
+        example: 'VD: pip package, Docker, Vercel',
         default: 'Docker'
     }
-];
+};
+
+/**
+ * Get questions for a specific project type
+ */
+const getQuestionsForType = (projectType) => {
+    const questionIds = projectType.questions || ['goal', 'features', 'platform', 'auth', 'data_sensitivity', 'deploy'];
+    return questionIds.map(id => ({
+        ...BASE_QUESTIONS[id],
+        default: projectType.defaults[id] || BASE_QUESTIONS[id].default
+    }));
+};
+
+// Legacy VIBE_QUESTIONS for backward compatibility (will be overridden)
+const VIBE_QUESTIONS = Object.values(BASE_QUESTIONS);
 
 // Read stdin as string (for --answers-stdin)
 const readStdin = () => new Promise((resolve) => {
@@ -198,18 +382,76 @@ const getAnswersNonInteractive = async (options) => {
         }
     }
 
-    // Merge with defaults from VIBE_QUESTIONS
-    const answers = { initial: options.description || '' };
-    for (const q of VIBE_QUESTIONS) {
-        answers[q.id] = rawAnswers[q.id] || q.default || '';
+    // Detect project type from description
+    const description = options.description || rawAnswers.goal || '';
+    const projectType = detectProjectType(description);
+    const detectedLanguage = detectLanguage(description);
+    const negations = detectExplicitNegations(description);
+
+    console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${projectType.name}`);
+    if (detectedLanguage) {
+        console.log(`${c.cyan}[DETECT]${c.reset} Language: ${detectedLanguage}`);
+    }
+    if (Object.keys(negations).length > 0) {
+        console.log(`${c.cyan}[DETECT]${c.reset} Explicit: ${Object.entries(negations).map(([k, v]) => `${k}=${v}`).join(', ')}`);
+    }
+
+    // Get questions for this project type
+    const questions = getQuestionsForType(projectType);
+
+    // Build answers with smart defaults
+    const answers = {
+        initial: description,
+        _projectType: projectType.id,
+        _detectedLanguage: detectedLanguage
+    };
+
+    for (const q of questions) {
+        // Priority: rawAnswers > negations > project type defaults
+        if (rawAnswers[q.id]) {
+            answers[q.id] = rawAnswers[q.id];
+        } else if (negations[q.id]) {
+            answers[q.id] = negations[q.id];
+        } else {
+            answers[q.id] = q.default || '';
+        }
+    }
+
+    // Auto-fill language if detected
+    if (detectedLanguage && !answers.language) {
+        answers.language = detectedLanguage;
     }
 
     // Use description as goal if goal is empty
-    if (!answers.goal && options.description) {
-        answers.goal = options.description;
+    if (!answers.goal && description) {
+        answers.goal = description;
+    }
+
+    // Extract features from description if not provided
+    if (!answers.features && description) {
+        answers.features = extractFeaturesFromDescription(description);
     }
 
     return answers;
+};
+
+/**
+ * Extract features from description using simple heuristics
+ */
+const extractFeaturesFromDescription = (description) => {
+    // Look for flag patterns like --health, --version
+    const flagMatches = description.match(/--\w+/g);
+    if (flagMatches) {
+        return flagMatches.map(f => f.replace('--', '')).join(', ');
+    }
+
+    // Look for "prints X", "outputs Y", "generates Z"
+    const actionMatches = description.match(/(?:prints?|outputs?|generates?|creates?|shows?)\s+["']?([^"',]+)["']?/gi);
+    if (actionMatches) {
+        return actionMatches.map(m => m.replace(/^(prints?|outputs?|generates?|creates?|shows?)\s+/i, '')).join(', ');
+    }
+
+    return '';
 };
 
 // Collect answers (interactive TTY mode)
@@ -217,20 +459,43 @@ const collectAnswers = async (initialDescription) => {
     const rl = createRL();
     const answers = {};
 
+    // Detect project type first
+    const projectType = detectProjectType(initialDescription);
+    const detectedLanguage = detectLanguage(initialDescription);
+    const negations = detectExplicitNegations(initialDescription);
+
     console.log(`\n${c.cyan}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
     console.log(`${c.cyan}${c.bold}   VIBE MODE - Mô tả dự án của bạn${c.reset}`);
     console.log(`${c.cyan}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
     if (initialDescription) {
-        console.log(`${c.dim}Mô tả ban đầu: ${initialDescription}${c.reset}\n`);
+        console.log(`${c.dim}Mô tả ban đầu: ${initialDescription}${c.reset}`);
+        console.log(`${c.cyan}[DETECT]${c.reset} Project type: ${projectType.name}`);
+        if (detectedLanguage) {
+            console.log(`${c.cyan}[DETECT]${c.reset} Language: ${detectedLanguage}`);
+        }
+        console.log();
         answers.initial = initialDescription;
     }
 
-    console.log(`${c.dim}Trả lời 6 câu hỏi sau (Enter để dùng mặc định):${c.reset}\n`);
+    answers._projectType = projectType.id;
+    answers._detectedLanguage = detectedLanguage;
 
-    for (const q of VIBE_QUESTIONS) {
+    // Get questions for this project type
+    const questions = getQuestionsForType(projectType);
+
+    console.log(`${c.dim}Trả lời ${questions.length} câu hỏi sau (Enter để dùng mặc định):${c.reset}\n`);
+
+    for (const q of questions) {
+        // Skip questions with explicit negations
+        if (negations[q.id]) {
+            answers[q.id] = negations[q.id];
+            console.log(`${c.dim}${q.question} → ${negations[q.id]} (từ mô tả)${c.reset}\n`);
+            continue;
+        }
+
         console.log(`${c.yellow}${q.question}${c.reset}`);
-        console.log(`${c.dim}${q.example}${c.reset}`);
+        console.log(`${c.dim}${q.example} [mặc định: ${q.default}]${c.reset}`);
 
         const answer = await ask(rl, `${c.green}> ${c.reset}`);
         answers[q.id] = answer || q.default || '';
@@ -255,6 +520,7 @@ const generateSlug = (answers) => {
 
 // Parse features from comma-separated string
 const parseFeatures = (featuresStr) => {
+    if (!featuresStr) return [];
     return featuresStr
         .split(/[,;]/)
         .map(f => f.trim())
@@ -269,32 +535,127 @@ const parseFeatures = (featuresStr) => {
         }));
 };
 
-// Determine tech stack based on platform
-const determineTechStack = (platform, auth) => {
+// Determine tech stack based on project type and language
+const determineTechStack = (answers) => {
+    const projectType = answers._projectType || 'web';
+    const language = answers._detectedLanguage || answers.language;
+    const platform = answers.platform || '';
+    const auth = answers.auth || 'none';
     const stack = [];
 
-    if (platform.includes('web')) {
-        stack.push({ layer: 'Frontend', tech: 'Next.js + React', reason: 'Phổ biến, dễ deploy' });
-        stack.push({ layer: 'Styling', tech: 'Tailwind CSS', reason: 'Nhanh, responsive' });
-    }
-    if (platform.includes('mobile') || platform.includes('app')) {
-        stack.push({ layer: 'Mobile', tech: 'React Native', reason: 'Code 1 lần, chạy iOS + Android' });
+    // CLI projects
+    if (projectType === 'cli') {
+        if (language === 'python') {
+            stack.push({ layer: 'Language', tech: 'Python 3.10+', reason: 'Widely supported' });
+            stack.push({ layer: 'CLI Framework', tech: 'argparse or click', reason: 'Standard library / popular' });
+            stack.push({ layer: 'Package', tech: 'pip + pyproject.toml', reason: 'Modern Python packaging' });
+        } else if (language === 'node') {
+            stack.push({ layer: 'Language', tech: 'Node.js 18+', reason: 'LTS version' });
+            stack.push({ layer: 'CLI Framework', tech: 'commander or yargs', reason: 'Popular, well-documented' });
+            stack.push({ layer: 'Package', tech: 'npm', reason: 'Standard for Node' });
+        } else if (language === 'go') {
+            stack.push({ layer: 'Language', tech: 'Go 1.21+', reason: 'Fast compilation' });
+            stack.push({ layer: 'CLI Framework', tech: 'cobra', reason: 'Industry standard' });
+        } else if (language === 'rust') {
+            stack.push({ layer: 'Language', tech: 'Rust', reason: 'Performance, safety' });
+            stack.push({ layer: 'CLI Framework', tech: 'clap', reason: 'De facto standard' });
+        } else if (language === 'dotnet') {
+            stack.push({ layer: 'Language', tech: 'C# / .NET 8', reason: 'Latest LTS' });
+            stack.push({ layer: 'CLI Framework', tech: 'System.CommandLine', reason: 'Official MS library' });
+        }
+        return stack;
     }
 
-    stack.push({ layer: 'Database', tech: 'PostgreSQL + Prisma', reason: 'Ổn định, dễ dùng' });
+    // API projects
+    if (projectType === 'api') {
+        if (language === 'python') {
+            stack.push({ layer: 'Language', tech: 'Python 3.10+', reason: 'Widely supported' });
+            stack.push({ layer: 'Framework', tech: 'FastAPI', reason: 'Async, auto OpenAPI docs' });
+            stack.push({ layer: 'ORM', tech: 'SQLAlchemy + Alembic', reason: 'Mature, flexible' });
+        } else if (language === 'node') {
+            stack.push({ layer: 'Language', tech: 'Node.js / TypeScript', reason: 'Type safety' });
+            stack.push({ layer: 'Framework', tech: 'Express or Fastify', reason: 'Popular, performant' });
+            stack.push({ layer: 'ORM', tech: 'Prisma', reason: 'Modern, type-safe' });
+        } else {
+            stack.push({ layer: 'Framework', tech: 'FastAPI (Python)', reason: 'Default API framework' });
+        }
 
-    if (auth && auth !== 'không' && auth !== 'không cần') {
-        stack.push({ layer: 'Auth', tech: 'NextAuth.js', reason: 'Hỗ trợ nhiều provider' });
+        if (auth !== 'none' && auth !== 'không') {
+            stack.push({ layer: 'Auth', tech: 'JWT / API Key', reason: 'Standard for APIs' });
+        }
+
+        stack.push({ layer: 'Deploy', tech: 'Docker', reason: 'Portable, consistent' });
+        return stack;
     }
 
-    stack.push({ layer: 'Hosting', tech: 'Vercel', reason: 'Free tier tốt, dễ deploy' });
+    // Library projects
+    if (projectType === 'library') {
+        if (language === 'python') {
+            stack.push({ layer: 'Language', tech: 'Python 3.8+', reason: 'Wide compatibility' });
+            stack.push({ layer: 'Build', tech: 'pyproject.toml + setuptools', reason: 'PEP 621' });
+            stack.push({ layer: 'Test', tech: 'pytest', reason: 'De facto standard' });
+            stack.push({ layer: 'Publish', tech: 'PyPI', reason: 'Package registry' });
+        } else if (language === 'node') {
+            stack.push({ layer: 'Language', tech: 'TypeScript', reason: 'Type safety for libs' });
+            stack.push({ layer: 'Build', tech: 'tsup or esbuild', reason: 'Fast bundling' });
+            stack.push({ layer: 'Test', tech: 'vitest', reason: 'Fast, modern' });
+            stack.push({ layer: 'Publish', tech: 'npm', reason: 'Package registry' });
+        }
+        return stack;
+    }
+
+    // Mobile projects
+    if (projectType === 'mobile') {
+        stack.push({ layer: 'Framework', tech: 'React Native', reason: 'Cross-platform' });
+        stack.push({ layer: 'Navigation', tech: 'React Navigation', reason: 'Standard' });
+        if (auth !== 'none' && auth !== 'không') {
+            stack.push({ layer: 'Auth', tech: 'Firebase Auth', reason: 'Easy mobile auth' });
+        }
+        stack.push({ layer: 'Deploy', tech: 'EAS Build', reason: 'Expo tooling' });
+        return stack;
+    }
+
+    // Web projects (default)
+    if (platform.includes('web') || projectType === 'web') {
+        stack.push({ layer: 'Frontend', tech: 'Next.js + React', reason: 'Full-stack capable' });
+        stack.push({ layer: 'Styling', tech: 'Tailwind CSS', reason: 'Utility-first' });
+    }
+
+    // Only add database if needed
+    const needsDb = auth !== 'none' || (answers.data_sensitivity && answers.data_sensitivity !== 'none');
+    if (needsDb) {
+        stack.push({ layer: 'Database', tech: 'PostgreSQL + Prisma', reason: 'Type-safe ORM' });
+    }
+
+    if (auth && auth !== 'none' && auth !== 'không' && auth !== 'không cần') {
+        stack.push({ layer: 'Auth', tech: 'NextAuth.js', reason: 'Multi-provider' });
+    }
+
+    stack.push({ layer: 'Hosting', tech: 'Vercel', reason: 'Zero-config deploy' });
 
     return stack;
 };
 
 // Generate intake from answers
 const generateIntake = (answers, runId) => {
-    const features = parseFeatures(answers.features);
+    const features = parseFeatures(answers.features || '');
+    const projectType = answers._projectType || 'web';
+    const language = answers._detectedLanguage || answers.language;
+
+    // Determine actual platform based on project type
+    let platform = answers.platform;
+    if (!platform || platform === 'web responsive') {
+        if (projectType === 'cli') platform = 'cli';
+        else if (projectType === 'api') platform = 'api';
+        else if (projectType === 'library') platform = 'library';
+        else if (projectType === 'mobile') platform = 'mobile';
+    }
+
+    // Handle auth - respect "none" values
+    let auth = answers.auth;
+    if (auth === 'none' || auth === 'không' || auth === 'không cần') {
+        auth = 'none';
+    }
 
     return {
         version: '1.0',
@@ -303,11 +664,13 @@ const generateIntake = (answers, runId) => {
         mode: 'vibe',
         project: {
             name: generateSlug(answers).replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            type: answers.platform || 'web',
+            type: projectType,
+            platform: platform,
+            language: language,
             description: answers.goal || answers.initial || ''
         },
         target_users: {
-            primary: answers.goal?.split(',')[0] || 'End users',
+            primary: answers.goal?.split(',')[0] || 'Developers',
             secondary: ''
         },
         scope: {
@@ -316,9 +679,10 @@ const generateIntake = (answers, runId) => {
             out_of_scope: []
         },
         constraints: {
-            auth: answers.auth || 'email',
-            platform: answers.platform || 'web responsive',
-            data_sensitivity: answers.data_sensitivity || 'unknown',
+            auth: auth || 'none',
+            platform: platform,
+            language: language,
+            data_sensitivity: answers.data_sensitivity || 'none',
             deploy: answers.deploy || 'Docker'
         },
         _raw_answers: answers
@@ -328,81 +692,163 @@ const generateIntake = (answers, runId) => {
 // Generate spec from intake
 const generateSpec = (intake, researchNote) => {
     const features = parseFeatures(intake._raw_answers?.features || '');
-    const techStack = determineTechStack(
-        intake.constraints?.platform || 'web',
-        intake.constraints?.auth
-    );
+    const techStack = determineTechStack(intake._raw_answers || {});
+    const projectType = intake.project?.type || 'web';
+    const language = intake.project?.language || intake.constraints?.language;
+    const auth = intake.constraints?.auth || 'none';
+    const isAuthRequired = auth !== 'none' && auth !== 'không' && auth !== 'không cần';
 
-    // Build spec inline (no template needed)
+    // Build spec based on project type
     let spec = `# ${intake.project.name} - Specification
 
-> Tài liệu này mô tả chi tiết dự án để developer hoặc AI agent có thể implement.
-> **Phiên bản:** 1.0 | **Ngày tạo:** ${new Date().toISOString()}
+> This document describes the project for developer or AI agent implementation.
+> **Version:** 1.0 | **Created:** ${new Date().toISOString()}
 
 ---
 
-## 1. Tổng Quan
+## 1. Overview
 
-### Dự án là gì?
+### What is this project?
 ${intake.project.description}
 
-### Ai sẽ dùng?
-${intake.target_users.primary}
+### Project Type
+- **Type:** ${PROJECT_TYPES[projectType]?.name || projectType}
+${language ? `- **Language:** ${language}` : ''}
+- **Platform:** ${intake.constraints?.platform || projectType}
 
-### Mục tiêu chính
-Xây dựng ${intake.project.type} với các tính năng: ${intake.scope.mvp_features.join(', ')}
+### Target Users
+${intake.target_users?.primary || 'Developers'}
+
+### MVP Features
+${intake.scope?.mvp_features?.length > 0 ? intake.scope.mvp_features.map(f => `- ${f}`).join('\n') : '- See feature list below'}
 
 ---
 
-## 2. Tính Năng MVP (Bắt buộc có)
+## 2. Features (MVP)
+`;
 
-> Đây là các tính năng **phải có** trong phiên bản đầu tiên.
+    // Generate feature section based on project type
+    if (projectType === 'cli') {
+        spec += `
+> Command-line interface features
+
+${features.filter(f => f.priority === 'P0').map((f, i) => `
+### ${i + 1}. \`--${f.name}\` flag
+
+**Description:** ${f.description}
+
+**Usage:**
+\`\`\`bash
+${intake.project.name.toLowerCase().replace(/\s+/g, '-')} --${f.name}
+\`\`\`
+
+**Acceptance criteria:**
+- [ ] Flag \`--${f.name}\` works correctly
+- [ ] Proper error handling
+- [ ] Help text describes this flag
+`).join('\n---\n')}
+`;
+    } else if (projectType === 'api') {
+        spec += `
+> API endpoints
 
 ${features.filter(f => f.priority === 'P0').map((f, i) => `
 ### ${i + 1}. ${f.name}
 
-**Mô tả:** ${f.description}
+**Endpoint:** \`/api/${f.name.toLowerCase().replace(/\s+/g, '-')}\`
 
-**User flow:**
-1. User truy cập tính năng ${f.name}
-2. User thực hiện action
-3. Hệ thống xử lý và phản hồi
+**Method:** GET/POST (as appropriate)
+
+**Response:**
+\`\`\`json
+{ "status": "ok", "data": {} }
+\`\`\`
 
 **Acceptance criteria:**
-- [ ] Tính năng ${f.name} hoạt động đúng
-- [ ] UI/UX thân thiện
-- [ ] Không có lỗi critical
+- [ ] Endpoint responds correctly
+- [ ] Proper error codes
+- [ ] Input validation
 `).join('\n---\n')}
+`;
+    } else if (projectType === 'library') {
+        spec += `
+> Library functions/classes
+
+${features.filter(f => f.priority === 'P0').map((f, i) => `
+### ${i + 1}. ${f.name}
+
+**Function/Class:** \`${f.name.replace(/\s+/g, '_')}\`
+
+**Usage:**
+\`\`\`${language || 'python'}
+# Example usage
+result = ${f.name.replace(/\s+/g, '_')}()
+\`\`\`
+
+**Acceptance criteria:**
+- [ ] Function works as documented
+- [ ] Unit tests pass
+- [ ] Type hints/docs provided
+`).join('\n---\n')}
+`;
+    } else {
+        // Web/Mobile - original format
+        spec += `
+${features.filter(f => f.priority === 'P0').map((f, i) => `
+### ${i + 1}. ${f.name}
+
+**Description:** ${f.description}
+
+**User flow:**
+1. User accesses ${f.name} feature
+2. User performs action
+3. System processes and responds
+
+**Acceptance criteria:**
+- [ ] Feature ${f.name} works correctly
+- [ ] Good UX
+- [ ] No critical bugs
+`).join('\n---\n')}
+`;
+    }
+
+    spec += `
+---
+
+## 3. Future Features (Not MVP)
+
+${features.filter(f => f.priority === 'P1').map(f => `- **${f.name}**: Post-MVP`).join('\n') || '- No future features defined yet'}
 
 ---
 
-## 3. Tính Năng Tương Lai (Không làm ngay)
+## 4. Technical Requirements
 
-${features.filter(f => f.priority === 'P1').map(f => `- **${f.name}**: Sẽ implement sau MVP`).join('\n')}
-
----
-
-## 4. Yêu Cầu Kỹ Thuật
-
-### Nền tảng
-- **Loại:** ${intake.constraints.platform}
-- **Responsive:** Có
+### Platform & Language
+- **Type:** ${projectType}
+${language ? `- **Language:** ${language}` : ''}
+- **Platform:** ${intake.constraints?.platform || 'N/A'}
 
 ### Authentication
-- **Cần đăng nhập:** ${intake.constraints.auth !== 'không' && intake.constraints.auth !== 'không cần' ? 'Có' : 'Không'}
-- **Phương thức:** ${intake.constraints.auth}
+- **Required:** ${isAuthRequired ? 'Yes' : 'No'}
+${isAuthRequired ? `- **Method:** ${auth}` : ''}
 
-### Tech Stack (Đề xuất)
+### Database
+- **Required:** ${intake.constraints?.data_sensitivity !== 'none' ? 'Yes' : 'No'}
 
-| Layer | Công nghệ | Lý do |
-|-------|-----------|-------|
+### Tech Stack
+
+| Layer | Technology | Reason |
+|-------|------------|--------|
 ${techStack.map(t => `| ${t.layer} | ${t.tech} | ${t.reason} |`).join('\n')}
 
 ---
 
-## 5. Constraints & Giới Hạn
+## 5. Constraints
 
-${intake.constraints.special ? `- **Yêu cầu đặc biệt:** ${intake.constraints.special}` : '- Không có yêu cầu đặc biệt'}
+${intake.constraints?.data_sensitivity && intake.constraints.data_sensitivity !== 'none'
+    ? `- **Data sensitivity:** ${intake.constraints.data_sensitivity}`
+    : '- No special data handling required'}
+${intake.constraints?.special ? `- **Special requirements:** ${intake.constraints.special}` : ''}
 
 ---
 
@@ -412,17 +858,17 @@ ${researchNote ? `## 6. Research Notes
 
 ---` : ''}
 
-## Checklist Trước Khi Code
+## Checklist Before Coding
 
-- [ ] Đã hiểu mục tiêu dự án (Section 1)
-- [ ] Đã hiểu MVP features (Section 2)
-- [ ] Đã setup tech stack (Section 4)
-- [ ] Đã hoàn thành UI
-- [ ] Đã test các tính năng chính
+- [ ] Understand project goal (Section 1)
+- [ ] Understand MVP features (Section 2)
+- [ ] Setup tech stack (Section 4)
+- [ ] Implement features
+- [ ] Test all features
 
 ---
 
-*Spec được tạo bởi AI Agent Toolkit - Vibe Mode*
+*Spec generated by AI Agent Toolkit - Vibe Mode*
 *Run ID: ${intake.run_id}*
 `;
 
@@ -879,16 +1325,54 @@ artifacts/runs/latest/
 `;
 };
 
+// Build research query based on project type
+const buildResearchQuery = (intake) => {
+    const projectType = intake.project?.type || 'web';
+    const language = intake.project?.language || intake.constraints?.language;
+    const features = intake.scope?.mvp_features?.slice(0, 2) || [];
+
+    // Language-specific query terms
+    const langTerms = {
+        python: 'python',
+        node: 'nodejs typescript',
+        dotnet: 'dotnet csharp',
+        go: 'golang',
+        rust: 'rust',
+        java: 'java'
+    };
+
+    // Project type-specific query terms
+    const typeTerms = {
+        cli: 'cli command-line',
+        api: 'api rest',
+        library: 'library package',
+        mobile: 'mobile app',
+        web: 'web'
+    };
+
+    const langTerm = langTerms[language] || '';
+    const typeTerm = typeTerms[projectType] || 'web';
+    const featureTerms = features.join(' ');
+
+    // Build query: language + type + features
+    const query = `${langTerm} ${typeTerm} ${featureTerms}`.trim();
+
+    return query + ' stars:>100';
+};
+
 // Try to run research (best effort)
 const tryResearch = async (intake) => {
     if (!process.env.BRAVE_API_KEY && !process.env.GITHUB_TOKEN) {
-        return { success: false, note: 'Research bỏ qua (thiếu BRAVE_API_KEY và GITHUB_TOKEN)' };
+        return { success: false, note: 'Research skipped (no BRAVE_API_KEY or GITHUB_TOKEN)' };
     }
+
+    // Build project-type specific query
+    const query = buildResearchQuery(intake);
+
+    console.log(`  ${c.dim}Search query: ${query}${c.reset}`);
 
     // Try GitHub search
     const https = require('https');
-    const keywords = intake.scope.mvp_features.slice(0, 3).join(' ');
-    const query = `${intake.project.type} ${keywords} stars:>100`;
 
     return new Promise((resolve) => {
         const options = {
@@ -920,21 +1404,22 @@ const tryResearch = async (intake) => {
                         resolve({
                             success: true,
                             repos,
-                            note: `Tìm thấy ${repos.length} repos tham khảo`
+                            query,
+                            note: `Found ${repos.length} reference repos`
                         });
                     } else {
-                        resolve({ success: false, note: 'Không tìm thấy repo tham khảo' });
+                        resolve({ success: false, note: 'No reference repos found', query });
                     }
                 } catch (e) {
-                    resolve({ success: false, note: 'Lỗi parse response' });
+                    resolve({ success: false, note: 'Error parsing response', query });
                 }
             });
         });
 
-        req.on('error', () => resolve({ success: false, note: 'Lỗi kết nối GitHub' }));
+        req.on('error', () => resolve({ success: false, note: 'GitHub connection error', query }));
         req.setTimeout(5000, () => {
             req.destroy();
-            resolve({ success: false, note: 'Timeout khi search GitHub' });
+            resolve({ success: false, note: 'GitHub search timeout', query });
         });
         req.end();
     });
