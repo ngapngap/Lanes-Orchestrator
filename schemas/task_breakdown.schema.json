@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/task_breakdown.schema.json",
+  "title": "task_breakdown.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["milestones", "tasks", "provenance"],
+  "properties": {
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "exit_criteria", "tasks"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "exit_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "tasks": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Task node_ids in this milestone"
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "node_id",
+          "title",
+          "owner_lane",
+          "depends_on",
+          "inputs",
+          "artifact_out",
+          "exit_criteria",
+          "validation_cmd"
+        ],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique task identifier"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "owner_lane": {
+            "type": "string",
+            "enum": ["ui", "api", "data", "qa", "security"]
+          },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "node_ids of dependencies"
+          },
+          "parallel_group": {
+            "type": "string",
+            "description": "Group for parallel execution"
+          },
+          "inputs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Input artifact paths"
+          },
+          "artifact_out": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Output artifact paths"
+          },
+          "exit_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "validation_cmd": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Commands to validate completion"
+          },
+          "rollback_plan": {
+            "type": "string",
+            "description": "How to rollback if failed"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["timestamp"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "commit_hash": { "type": "string" }
+      }
+    }
+  }
+}

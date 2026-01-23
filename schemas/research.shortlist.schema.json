@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/research.shortlist.schema.json",
+  "title": "research.shortlist.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "problem_summary",
+    "recommended_path",
+    "rationale",
+    "baseline_verification",
+    "candidates",
+    "assumptions",
+    "open_questions",
+    "provenance"
+  ],
+  "properties": {
+    "problem_summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Summary of the problem to solve"
+    },
+    "recommended_path": {
+      "type": "string",
+      "enum": ["reuse", "build", "hybrid"],
+      "description": "Recommended approach"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Why this path is recommended"
+    },
+    "baseline_verification": {
+      "type": "object",
+      "required": ["required", "cmds"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "cmds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "repo_url",
+          "commit_or_tag",
+          "license",
+          "activity_score",
+          "fit_score",
+          "security_notes",
+          "reuse_candidate",
+          "bootstrap_steps",
+          "baseline_verification",
+          "effort_estimate",
+          "risks"
+        ],
+        "properties": {
+          "repo_url": { "type": "string", "format": "uri" },
+          "commit_or_tag": { "type": "string" },
+          "license": { "type": "string" },
+          "activity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "fit_score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "security_notes": { "type": "string" },
+          "reuse_candidate": { "type": "boolean" },
+          "bootstrap_steps": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "baseline_verification": {
+            "type": "object",
+            "required": ["required", "cmds"],
+            "properties": {
+              "required": { "type": "boolean" },
+              "cmds": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          },
+          "effort_estimate": {
+            "type": "string",
+            "enum": ["XS", "S", "M", "L", "XL"]
+          },
+          "risks": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["timestamp"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "mode": { "type": "string" },
+        "model_versions": { "type": "object" },
+        "commit_hash": { "type": "string" }
+      }
+    }
+  }
+}

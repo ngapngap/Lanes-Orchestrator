@@ -1,0 +1,82 @@
+{
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Foundation",
+      "exit_criteria": ["CI green", "All baseline tests pass"],
+      "tasks": ["api-001", "security-001"]
+    },
+    {
+      "id": "M1",
+      "title": "Core Features",
+      "exit_criteria": ["Auth working", "Basic CRUD functional"],
+      "tasks": ["api-002", "ui-001", "data-001"]
+    }
+  ],
+  "tasks": [
+    {
+      "node_id": "api-001",
+      "title": "Bootstrap repo + health endpoint",
+      "owner_lane": "api",
+      "depends_on": [],
+      "parallel_group": "foundation",
+      "inputs": ["artifacts/runs/<run_id>/10_intake/intake.json"],
+      "artifact_out": ["artifacts/runs/<run_id>/50_implementation/handoff/api/README.md"],
+      "exit_criteria": ["GET /health returns 200"],
+      "validation_cmd": ["npm test"],
+      "rollback_plan": "Revert commit if baseline fails"
+    },
+    {
+      "node_id": "security-001",
+      "title": "Secret scan + dependency audit",
+      "owner_lane": "security",
+      "depends_on": [],
+      "parallel_group": "foundation",
+      "inputs": ["."],
+      "artifact_out": ["artifacts/runs/<run_id>/60_verification/security_review.md"],
+      "exit_criteria": ["No secrets committed", "No critical CVEs"],
+      "validation_cmd": ["gitleaks detect --no-git", "npm audit --audit-level=critical"],
+      "rollback_plan": "Block release until mitigated"
+    },
+    {
+      "node_id": "api-002",
+      "title": "Implement authentication endpoints",
+      "owner_lane": "api",
+      "depends_on": ["api-001"],
+      "parallel_group": "core",
+      "inputs": ["artifacts/runs/<run_id>/40_spec/spec.md"],
+      "artifact_out": ["artifacts/runs/<run_id>/50_implementation/handoff/api/auth.md"],
+      "exit_criteria": ["Login endpoint returns JWT", "Logout invalidates token"],
+      "validation_cmd": ["npm test -- --grep auth"],
+      "rollback_plan": "Revert auth-related commits"
+    },
+    {
+      "node_id": "ui-001",
+      "title": "Create login/register pages",
+      "owner_lane": "ui",
+      "depends_on": ["api-002"],
+      "parallel_group": "core",
+      "inputs": ["artifacts/runs/<run_id>/45_design/handoff.md"],
+      "artifact_out": ["artifacts/runs/<run_id>/50_implementation/handoff/ui/auth-pages.md"],
+      "exit_criteria": ["Login form submits", "Error states display"],
+      "validation_cmd": ["npm run test:ui"],
+      "rollback_plan": "Revert UI changes"
+    },
+    {
+      "node_id": "data-001",
+      "title": "Set up database schema",
+      "owner_lane": "data",
+      "depends_on": ["api-001"],
+      "parallel_group": "core",
+      "inputs": ["artifacts/runs/<run_id>/40_spec/spec.md"],
+      "artifact_out": ["artifacts/runs/<run_id>/50_implementation/handoff/data/schema.md"],
+      "exit_criteria": ["Migrations run successfully", "Seed data loads"],
+      "validation_cmd": ["npm run db:migrate", "npm run db:seed"],
+      "rollback_plan": "Drop and recreate database"
+    }
+  ],
+  "provenance": {
+    "timestamp": "2026-01-22T00:00:00Z",
+    "commit_hash": "<git-commit>"
+  }
+}

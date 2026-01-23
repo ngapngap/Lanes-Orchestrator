@@ -1,84 +1,62 @@
-# AI Agent Toolkit - Pipeline cho Vòng đời Dự án
+# AI Agent Toolkit — AGENTS.md
 
-## Tổng quan
+## Overview
 
-Đây là một **pipeline hoàn chỉnh** cho vòng đời phát triển phần mềm, được điều phối bởi AI agents. Pipeline bao gồm 6 skills chính và 10 agent configurations.
-
-## Quick Start
-
-### 1. Thu thập Requirements
-```bash
-node ".agent/skills/intake/scripts/start-intake.js"
-```
-
-### 2. Tìm kiếm Repo mẫu
-```bash
-node ".agent/skills/research/scripts/search-github.js"
-```
-
-### 3. Tạo Design System
-```bash
-node ".agent/skills/ui-ux/scripts/generate-design.js"
-```
-
-### 4. Verify Code Quality
-```bash
-node ".agent/skills/qa-gate/scripts/run-gate.js"
-```
-
-## Cấu trúc Dự án
+Pipeline hoàn chỉnh cho vòng đời phát triển phần mềm, điều phối bởi AI agents.
 
 ```
-.agent/
-├── skills/                    # Các skills
-│   ├── intake/               # Thu thập requirements
-│   ├── research/             # Tìm repo mẫu
-│   ├── spec-kit-creator/     # Tạo specifications
-│   ├── orchestrator/         # Điều phối lanes
-│   ├── ui-ux/                # Thiết kế UI/UX
-│   └── qa-gate/              # Verify code quality
-│
-├── agents/                    # Agent configurations
-│   ├── manager.md            # Điều phối pipeline
-│   ├── intake-agent.md       # Thu thập requirements
-│   ├── research-agent.md     # Tìm patterns
-│   ├── spec-agent.md         # Tạo specs
-│   ├── ui-ux-agent.md        # Thiết kế
-│   ├── verifier-agent.md     # Verify
-│   └── lane-agents/          # Các lane agents
-│       ├── ui-lane.md
-│       ├── api-lane.md
-│       ├── data-lane.md
-│       └── qa-lane.md
-│
-└── workflows/                 # Quy trình làm việc
-    ├── full-pipeline.md      # Đầy đủ
-    ├── quick-flow.md         # Nhanh
-    └── enterprise.md         # Doanh nghiệp
+Orchestrator → Ask(Intake) → Architect(Research) → Debate → Architect(Spec) → Design? → Code → QA Gate → Debug/Security
 ```
-
-## Skills
-
-| Skill | Mô tả | Status |
-|-------|-------|--------|
-| **intake** | Thu thập requirements từ user | ✅ |
-| **research** | Tìm repo mẫu trên GitHub | ✅ |
-| **spec-kit-creator** | Tạo specifications | ✅ |
-| **orchestrator** | Điều phối lanes | ✅ |
-| **ui-ux** | Thiết kế UI/UX | ✅ |
-| **qa-gate** | Verify code quality | ✅ |
 
 ## Agents
 
-| Agent | Nhiệm vụ | Skills Used |
-|-------|----------|-------------|
-| **Manager** | Điều phối pipeline | orchestrator |
-| **Intake** | Thu thập requirements | intake |
-| **Research** | Tìm patterns | research |
-| **Spec** | Tạo specifications | spec-kit-creator |
-| **UI/UX** | Thiết kế giao diện | ui-ux |
-| **Verifier** | Verify code | qa-gate |
-| **Lane Agents** | Triển khai code | orchestrator |
+| Agent | File | Role | Skills |
+|-------|------|------|--------|
+| **Orchestrator** | `agents/orchestrator.agent.md` | Điều phối pipeline | orchestrator, debate |
+| **Ask** | `agents/ask.agent.md` | Thu thập requirements | intake |
+| **Architect** | `agents/architect.agent.md` | Research + Spec | research, brave-search, github, spec-agent |
+| **Debate** | `agents/debate.agent.md` | Council decision | debate |
+| **Spec** | `agents/spec.agent.md` | Task breakdown | spec-agent |
+| **Design** | `agents/design.agent.md` | UI/UX handoff (optional) | ui-ux |
+| **Code** | `agents/code.agent.md` | Implementation | (per language) |
+| **QA Gate** | `agents/qa_gate.agent.md` | Verification | qa-gate |
+| **Debug/Security** | `agents/debug_security.agent.md` | Root cause + Security | debug-security |
+
+## Skills
+
+| Skill | Path | Purpose |
+|-------|------|---------|
+| intake | `.agent/skills/intake/` | Requirements gathering |
+| research | `.agent/skills/research/` | Repo/pattern discovery |
+| brave-search | `.agent/skills/brave-search/` | Web search API |
+| github | `.agent/skills/github/` | GitHub operations |
+| debate | `.agent/skills/debate/` | Council debate |
+| spec-agent | `.agent/skills/spec-agent/` | Spec + DAG generation |
+| ui-ux | `.agent/skills/ui-ux/` | Design system |
+| qa-gate | `.agent/skills/qa-gate/` | Verification |
+| debug-security | `.agent/skills/debug-security/` | Debug + Security |
+| orchestrator | `.agent/skills/orchestrator/` | Lane coordination |
+
+## Gates
+
+| Gate ID | Check | On Fail |
+|---------|-------|---------|
+| `intake_ready` | intake.json exists + valid | rerun Ask |
+| `reuse_gate_passed` | shortlist + assessment exist | rerun Research |
+| `debate_ready_for_spec` | debate.inputs_for_spec.json valid | rerun Debate |
+| `spec_ready` | spec.md + task_breakdown.json valid | rerun Spec |
+| `lane_handoff_ready` | handoff bundles complete | rerun Code |
+| `qa_passed` | report.json.status = pass | route Debug → Spec |
+
+## Lanes
+
+| Lane | Responsibility |
+|------|----------------|
+| `ui` | Frontend, UI components |
+| `api` | Backend, API endpoints |
+| `data` | Database, migrations |
+| `qa` | Testing, quality |
+| `security` | Security, compliance |
 
 ## Pipeline Flow
 
@@ -88,15 +66,15 @@ User Request
     ▼
 ┌───────────────────────────────────────────────────────────┐
 │                     DISCOVERY PHASE                        │
-│  Intake Agent ──► Research Agent                          │
-│  (intake.md)      (patterns.md)                           │
+│  Ask (Intake) ──► Architect (Research)                    │
+│  (intake.json)   (shortlist.json, patterns.md)            │
 └───────────────────────────────────────────────────────────┘
     │
     ▼
 ┌───────────────────────────────────────────────────────────┐
 │                     PLANNING PHASE                         │
-│  Spec Agent ──► UI/UX Agent (optional)                    │
-│  (specs/)       (design/MASTER.md)                        │
+│  Debate ──► Architect (Spec)  ──► Design (optional)       │
+│  (decision.md)  (spec.md, DAG)   (handoff.md)             │
 └───────────────────────────────────────────────────────────┘
     │
     ▼
@@ -110,51 +88,75 @@ User Request
     ▼
 ┌───────────────────────────────────────────────────────────┐
 │                     VERIFY PHASE                           │
-│  Verifier Agent ──► report.json                           │
+│  QA Gate ──► (if fail) ──► Debug/Security                 │
+│  (report.json)            (debug_report.md)               │
 └───────────────────────────────────────────────────────────┘
     │
     ▼
   COMPLETE
 ```
 
-## Workflows
-
-| Workflow | Khi nào dùng | Thời gian |
-|----------|--------------|-----------|
-| **Quick Flow** | Bug fixes, small changes | < 1 giờ |
-| **Full Pipeline** | New features, products | 1-4 tuần |
-| **Enterprise** | Compliance-heavy systems | 8-20 tuần |
-
-## Output Structure
+## Artifacts Layout
 
 ```
-output/
-├── intake/
-│   └── intake.md              # Requirements document
-├── research/
-│   ├── shortlist.json         # Top repos
-│   └── patterns.md            # Recommendations
-├── design/
-│   ├── MASTER.md              # Design system
-│   ├── pages/*.md             # Page specs
-│   └── handoff.md             # Developer handoff
-└── verification/
-    ├── report.json            # QA report
-    └── tests.md               # Human-readable report
+artifacts/runs/<run_id>/
+├── 00_user_request.md
+├── 10_intake/
+│   ├── intake.json
+│   └── intake.summary.md
+├── 20_research/
+│   ├── research.shortlist.json
+│   ├── research.reuse_assessment.json
+│   ├── research.patterns.md
+│   └── research.onepager.md
+├── 30_debate/
+│   ├── debate.inputs_for_spec.json
+│   └── debate.decision.md
+├── 40_spec/
+│   ├── spec.md
+│   └── task_breakdown.json
+├── 45_design/
+│   └── handoff.md
+├── 50_implementation/
+│   └── handoff/<lane>/
+├── 60_verification/
+│   ├── report.json
+│   ├── summary.md
+│   ├── debug_report.md
+│   └── security_review.md
 ```
 
-## Rule of Thumb
+## Quick Start
 
-| Tình huống | Skill cần gọi |
-|------------|---------------|
-| User đưa ý tưởng mơ hồ | `intake` |
-| Chưa rõ cách làm | `research` |
-| Đã chốt hướng | `spec-kit` |
-| Có UI phức tạp | `ui-ux` |
-| Triển khai song song | `orchestrator` |
-| Trước khi merge | `qa-gate` |
+```bash
+# 1. Thu thập Requirements
+node .agent/skills/intake/scripts/start-intake.js
 
-## Tham khảo
+# 2. Research
+node .agent/skills/research/scripts/search-github.js
 
-- [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) - AI-driven development framework
-- [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) - Design intelligence
+# 3. Debate
+node .agent/skills/debate/scripts/debate.js --input research.shortlist.json
+
+# 4. Generate Spec
+node .agent/skills/spec-agent/scripts/generate-spec.js --debate debate.inputs_for_spec.json
+
+# 5. Run QA Gate
+node .agent/skills/qa-gate/scripts/run-gate.js
+
+# 6. Debug (if needed)
+node .agent/skills/debug-security/scripts/debug.js --report report.json
+```
+
+## Documentation
+
+- [RULES.md](RULES.md) - Global rules
+- [qa.md](qa.md) - QA profile
+- [LICENSE_POLICY.md](LICENSE_POLICY.md) - License policy
+- [docs/ORCHESTRATOR_ADAPTER.md](docs/ORCHESTRATOR_ADAPTER.md) - Adapter contract
+- [docs/QA_TRIAGE.md](docs/QA_TRIAGE.md) - Triage protocol
+
+## References
+
+- [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)
+- [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)

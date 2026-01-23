@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/intake.schema.json",
+  "title": "intake.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goal",
+    "users",
+    "success_metrics",
+    "mvp_scope",
+    "non_goals",
+    "constraints",
+    "risks",
+    "open_questions",
+    "sizing",
+    "execution_mode"
+  ],
+  "properties": {
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary goal of the project"
+    },
+    "users": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Target users"
+    },
+    "current_workflow": {
+      "type": "string",
+      "description": "Current workflow (if any)"
+    },
+    "success_metrics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "How success will be measured"
+    },
+    "mvp_scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 7,
+      "description": "MVP scope (3-7 items)"
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What is explicitly out of scope"
+    },
+    "constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Stack/time/budget/security constraints"
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Known risks"
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Open questions to resolve"
+    },
+    "sizing": {
+      "type": "string",
+      "enum": ["XS", "S", "M", "L", "XL"],
+      "description": "T-shirt size estimate"
+    },
+    "execution_mode": {
+      "type": "string",
+      "enum": ["fast_build", "standard_pipeline"],
+      "description": "Execution mode"
+    }
+  }
+}

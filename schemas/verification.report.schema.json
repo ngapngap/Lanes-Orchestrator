@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/verification.report.schema.json",
+  "title": "verification.report.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "status", "commands", "evidence", "summary", "provenance"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Run identifier (YYYYMMDD_HHMM_<slug>)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Overall verification status"
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "cmd", "exit_code"],
+        "properties": {
+          "name": { "type": "string" },
+          "cmd": { "type": "string" },
+          "exit_code": { "type": "integer" },
+          "duration_ms": { "type": "integer" },
+          "logs_path": { "type": "string" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["artifacts"],
+      "properties": {
+        "artifacts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "links": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["highlights", "top_failures"],
+      "properties": {
+        "highlights": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "top_failures": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["timestamp"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "ci": { "type": "string" },
+        "commit_hash": { "type": "string" }
+      }
+    }
+  }
+}

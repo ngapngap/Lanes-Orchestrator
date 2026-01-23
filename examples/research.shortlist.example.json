@@ -1,0 +1,35 @@
+{
+  "problem_summary": "Build a small internal tool with auth + CRUD + dashboard.",
+  "recommended_path": "reuse",
+  "rationale": "Found a mature starter template matching stack and constraints.",
+  "baseline_verification": {
+    "required": true,
+    "cmds": ["git clone <repo>", "cd <repo>", "npm i", "npm test"]
+  },
+  "candidates": [
+    {
+      "repo_url": "https://github.com/example/starter",
+      "commit_or_tag": "v1.2.3",
+      "license": "MIT",
+      "activity_score": 0.8,
+      "fit_score": 0.85,
+      "security_notes": "No obvious secrets; run gitleaks + npm audit.",
+      "reuse_candidate": true,
+      "bootstrap_steps": ["npm i", "npm test"],
+      "baseline_verification": {
+        "required": true,
+        "cmds": ["npm test"]
+      },
+      "effort_estimate": "M",
+      "risks": ["Template may assume Postgres version >= 14"]
+    }
+  ],
+  "assumptions": ["We can use Node 20"],
+  "open_questions": ["SSO required?"],
+  "provenance": {
+    "timestamp": "2026-01-22T00:00:00Z",
+    "mode": "standard_pipeline",
+    "model_versions": {"research": "claude-opus-4-5-20251101"},
+    "commit_hash": "<git-commit>"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "goal": "Ship a deployable kit pipeline skeleton.",
+  "users": ["Nam", "team"],
+  "current_workflow": "Manual development without standardized pipeline",
+  "success_metrics": ["CI green", "Can run pipeline end-to-end"],
+  "mvp_scope": ["Contracts + gates", "One sample run", "Basic documentation"],
+  "non_goals": ["Perfect UI", "Full automation"],
+  "constraints": ["No hardcoded secrets", "Deployable doc", "Node.js 20+"],
+  "risks": ["Orchestrator adapter unclear", "Schema complexity"],
+  "open_questions": ["CI environment?", "Multi-tenant support?"],
+  "sizing": "M",
+  "execution_mode": "standard_pipeline"
+}

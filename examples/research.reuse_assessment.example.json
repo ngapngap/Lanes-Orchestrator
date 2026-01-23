@@ -1,0 +1,28 @@
+{
+  "recommended_path": "reuse",
+  "shortlisted_repo": {
+    "repo_url": "https://github.com/example/starter",
+    "commit_or_tag": "v1.2.3"
+  },
+  "license_check": {
+    "license": "MIT",
+    "policy": "allowlist",
+    "status": "allowed"
+  },
+  "baseline_verification": {
+    "required": true,
+    "cmds": ["npm test"],
+    "status": "pass",
+    "notes": "All tests pass, no issues found"
+  },
+  "security_baseline": {
+    "secret_scan": "pass",
+    "dependency_audit": "pass",
+    "sbom": "skipped"
+  },
+  "risks": ["Template assumes Postgres 14"],
+  "provenance": {
+    "timestamp": "2026-01-22T00:00:00Z",
+    "commit_hash": "<git-commit>"
+  }
+}

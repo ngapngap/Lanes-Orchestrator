@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/debate.inputs_for_spec.schema.json",
+  "title": "debate.inputs_for_spec.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "options",
+    "scoring_rubric",
+    "decision",
+    "rejected_options",
+    "seed_task_outline",
+    "assumptions",
+    "open_questions",
+    "non_goals",
+    "decision_lock",
+    "provenance"
+  ],
+  "properties": {
+    "options": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "summary", "pros", "cons", "estimated_cost", "risks"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "pros": { "type": "array", "items": { "type": "string" } },
+          "cons": { "type": "array", "items": { "type": "string" } },
+          "estimated_cost": { "type": "string" },
+          "risks": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "scoring_rubric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criteria", "weights"],
+      "properties": {
+        "criteria": { "type": "array", "items": { "type": "string" } },
+        "weights": { "type": "object" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chosen_option_id", "tie_break_reason"],
+      "properties": {
+        "chosen_option_id": { "type": "string", "minLength": 1 },
+        "tie_break_reason": { "type": "string" }
+      }
+    },
+    "rejected_options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "why"],
+        "properties": {
+          "id": { "type": "string" },
+          "why": { "type": "string" }
+        }
+      }
+    },
+    "disagreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": { "type": "string" },
+          "positions": { "type": "array", "items": { "type": "string" } },
+          "resolution": { "type": "string" }
+        }
+      }
+    },
+    "seed_task_outline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["owner_lane", "title", "acceptance"],
+        "properties": {
+          "owner_lane": {
+            "type": "string",
+            "enum": ["ui", "api", "data", "qa", "security"]
+          },
+          "title": { "type": "string" },
+          "acceptance": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "decision_lock": {
+      "type": "object",
+      "required": ["locked", "change_request_process"],
+      "properties": {
+        "locked": { "type": "boolean" },
+        "change_request_process": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["timestamp"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["ide", "runner", "manual"]
+        },
+        "participants": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "model_versions": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/search.reuse_assessment.schema.json",
+  "title": "research.reuse_assessment.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recommended_path",
+    "shortlisted_repo",
+    "license_check",
+    "baseline_verification",
+    "security_baseline",
+    "risks",
+    "provenance"
+  ],
+  "properties": {
+    "recommended_path": {
+      "type": "string",
+      "enum": ["reuse", "build", "hybrid"],
+      "description": "Final recommendation"
+    },
+    "shortlisted_repo": {
+      "type": "object",
+      "required": ["repo_url", "commit_or_tag"],
+      "properties": {
+        "repo_url": { "type": "string", "format": "uri" },
+        "commit_or_tag": { "type": "string" }
+      }
+    },
+    "license_check": {
+      "type": "object",
+      "required": ["license", "policy", "status"],
+      "properties": {
+        "license": { "type": "string" },
+        "policy": {
+          "type": "string",
+          "enum": ["allowlist", "blocklist", "review_required"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["allowed", "blocked", "unknown_requires_approval"]
+        }
+      }
+    },
+    "baseline_verification": {
+      "type": "object",
+      "required": ["required", "cmds", "status"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "cmds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "skipped"]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "security_baseline": {
+      "type": "object",
+      "required": ["secret_scan", "dependency_audit"],
+      "properties": {
+        "secret_scan": {
+          "type": "string",
+          "enum": ["pass", "fail", "skipped"]
+        },
+        "dependency_audit": {
+          "type": "string",
+          "enum": ["pass", "fail", "skipped"]
+        },
+        "sbom": {
+          "type": "string",
+          "enum": ["generated", "skipped"]
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["timestamp"],
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "commit_hash": { "type": "string" }
+      }
+    }
+  }
+}

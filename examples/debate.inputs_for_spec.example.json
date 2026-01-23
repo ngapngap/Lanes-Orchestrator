@@ -1,0 +1,70 @@
+{
+  "options": [
+    {
+      "id": "opt_reuse_template",
+      "summary": "Reuse an existing starter repo and customize.",
+      "pros": ["Fast delivery", "Battle-tested structure"],
+      "cons": ["Inherits template constraints"],
+      "estimated_cost": "S-M",
+      "risks": ["License mismatch", "Hidden tech debt"]
+    },
+    {
+      "id": "opt_build_from_scratch",
+      "summary": "Build everything from scratch.",
+      "pros": ["Full control", "No inherited constraints"],
+      "cons": ["Slower delivery", "More bugs initially"],
+      "estimated_cost": "L-XL",
+      "risks": ["Timeline overrun", "Reinventing the wheel"]
+    }
+  ],
+  "scoring_rubric": {
+    "criteria": ["constraint_compliance", "practicality", "risk_awareness", "clarity"],
+    "weights": {
+      "constraint_compliance": 0.3,
+      "practicality": 0.25,
+      "risk_awareness": 0.25,
+      "clarity": 0.2
+    }
+  },
+  "decision": {
+    "chosen_option_id": "opt_reuse_template",
+    "tie_break_reason": "Best time-to-value for current deadline"
+  },
+  "rejected_options": [
+    {
+      "id": "opt_build_from_scratch",
+      "why": "Too slow for current deadline"
+    }
+  ],
+  "disagreements": [],
+  "seed_task_outline": [
+    {
+      "owner_lane": "api",
+      "title": "Bootstrap repo + run baseline tests",
+      "acceptance": ["CI green", "Health endpoint returns 200"]
+    },
+    {
+      "owner_lane": "security",
+      "title": "Run gitleaks + dependency audit",
+      "acceptance": ["No secrets", "No high CVEs"]
+    },
+    {
+      "owner_lane": "ui",
+      "title": "Set up basic UI framework",
+      "acceptance": ["Dev server starts", "Landing page renders"]
+    }
+  ],
+  "assumptions": ["We can fork and modify the template", "MIT license is acceptable"],
+  "open_questions": ["Do we need multi-tenant?", "What authentication method?"],
+  "non_goals": ["Perfect design system", "Mobile app support"],
+  "decision_lock": {
+    "locked": true,
+    "change_request_process": "Change requires rerun Debate + update Spec"
+  },
+  "provenance": {
+    "mode": "ide",
+    "participants": ["Architect-A", "Architect-B", "Critic-C", "Devil-D", "Lead"],
+    "model_versions": {},
+    "timestamp": "2026-01-22T00:00:00Z"
+  }
+}
