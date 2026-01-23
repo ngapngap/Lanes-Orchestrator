@@ -738,125 +738,123 @@ docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
     };
 };
 
-// Generate NEXT_STEPS.md
+// Generate NEXT_STEPS.md (Non-coder friendly - NO technical terms)
 const generateNextSteps = (intake, tasks) => {
     const totalHours = tasks.estimated_total_hours;
-    const techStack = determineTechStack(
-        intake.constraints?.platform || 'web',
-        intake.constraints?.auth
-    );
+    const projectName = intake.project.name;
+    const costVND = Math.ceil(totalHours * 500000); // ~500k VND/hour estimate
+    const costUSD = Math.ceil(totalHours * 25);
 
-    return `# Bước Tiếp Theo - ${intake.project.name}
+    return `# ${projectName} - Hướng Dẫn Tiếp Theo
 
-> Tài liệu này hướng dẫn bạn các bước cần làm sau khi có spec.
-> Không cần biết code - chỉ cần làm theo từng bước.
+## ✅ Bạn đã hoàn thành bước mô tả!
 
----
-
-## Tình Trạng Hiện Tại
-
-| Giai đoạn | Trạng thái |
-|-----------|------------|
-| Thu thập yêu cầu | ✅ Hoàn thành |
-| Nghiên cứu giải pháp | ${process.env.BRAVE_API_KEY ? '✅ Hoàn thành' : '⚠️ Bỏ qua (thiếu API key)'} |
-| Tạo specification | ✅ Hoàn thành |
-| Chia nhỏ công việc | ✅ Hoàn thành |
+Chúng tôi đã tạo xong **bản thiết kế chi tiết** cho dự án của bạn.
+Bây giờ bạn cần chọn cách để biến thiết kế thành app thực tế.
 
 ---
 
-## Bạn Có 3 Lựa Chọn
+## 🚀 Cách 1: Dùng AI tạo app (NHANH NHẤT)
 
-### Lựa Chọn 1: Tự Code (Miễn phí)
+**Thời gian:** 5-30 phút | **Chi phí:** Miễn phí hoặc ~$20/tháng
 
-Nếu bạn biết code hoặc có bạn bè biết code:
+### Bước làm:
 
-1. **Mở file \`spec.md\`** - Đây là "bản vẽ" chi tiết của dự án
-2. **Mở file \`task_breakdown.json\`** - Đây là danh sách việc cần làm
-3. **Bắt đầu từ task có \`priority: "P0"\`** - Đây là việc quan trọng nhất
-4. **Hoàn thành từng task** theo thứ tự
+1. **Mở trang web:** Vào một trong các trang sau:
+   - [lovable.dev](https://lovable.dev) - Tạo app web đẹp
+   - [bolt.new](https://bolt.new) - Tạo app nhanh
+   - [v0.dev](https://v0.dev) - Tạo giao diện đẹp
 
-**Thời gian ước tính:** ${Math.ceil(totalHours / 8)} - ${Math.ceil(totalHours / 4)} ngày làm việc
+2. **Đăng nhập** bằng Google hoặc email
 
----
+3. **Mở file spec.md** trong thư mục này (dùng Notepad hoặc bất kỳ app đọc văn bản)
 
-### Lựa Chọn 2: Dùng AI Code Agent (Khuyến nghị)
+4. **Copy toàn bộ nội dung** (Ctrl+A rồi Ctrl+C)
 
-Dùng Claude Code, Cursor, hoặc Windsurf để code tự động:
+5. **Paste vào ô chat** của trang web (Ctrl+V)
 
-\`\`\`bash
-# Bước 1: Copy spec vào project mới
-mkdir ${generateSlug(intake._raw_answers)}
-cd ${generateSlug(intake._raw_answers)}
-cp path/to/spec.md ./SPEC.md
+6. **Nhấn Enter** và đợi 2-5 phút
 
-# Bước 2: Mở trong AI IDE và paste prompt này:
-\`\`\`
-
-**Prompt để paste vào AI:**
-\`\`\`
-Đọc file SPEC.md và implement theo đúng spec.
-Bắt đầu từ task P0, hoàn thành rồi chuyển sang P1.
-Sau mỗi task, chạy test để đảm bảo không lỗi.
-\`\`\`
-
-**Thời gian ước tính:** ${Math.ceil(totalHours / 16)} - ${Math.ceil(totalHours / 8)} ngày
+7. **App của bạn sẽ xuất hiện!** Bạn có thể xem trước và chỉnh sửa ngay trên trang.
 
 ---
 
-### Lựa Chọn 3: Thuê Developer
+## 💼 Cách 2: Thuê người làm
 
-Gửi file \`spec.md\` cho developer hoặc agency:
+**Thời gian:** 1-4 tuần | **Chi phí:** ${(costVND/1000000).toFixed(1)}-${(costVND*2/1000000).toFixed(1)} triệu VND (~$${costUSD}-$${costUSD*2})
 
-1. **Upload spec.md** lên Google Drive/Dropbox
-2. **Gửi link** cho developer kèm message:
-   > "Đây là spec chi tiết cho dự án. Vui lòng báo giá và timeline."
-3. **So sánh báo giá** từ 2-3 developer
+### Bước làm:
 
-**Nơi tìm developer:**
-- Upwork.com (quốc tế)
-- Freelancer.vn (Việt Nam)
-- TopDev.vn (Việt Nam)
-
-**Giá tham khảo:** $${Math.ceil(totalHours * 30)} - $${Math.ceil(totalHours * 50)} USD (tùy vùng)
+1. **Copy tin nhắn mẫu này:**
 
 ---
 
-## Các File Quan Trọng
+Chào anh/chị,
 
-| File | Mục đích | Ai cần đọc |
-|------|----------|------------|
-| \`spec.md\` | Mô tả chi tiết dự án | Developer, AI Agent |
-| \`task_breakdown.json\` | Danh sách việc cần làm | Developer, PM |
-| \`intake.json\` | Yêu cầu gốc của bạn | Tham khảo |
+Em cần làm ${projectName}. Em đã có bản thiết kế chi tiết (file đính kèm).
 
----
+Yêu cầu chính:
+${intake.scope.mvp_features.slice(0, 5).map(f => `- ${f}`).join('\n')}
 
-## Câu Hỏi Thường Gặp
+Anh/chị xem và báo giá + thời gian giúp em nhé.
 
-**Q: Tôi không hiểu spec.md?**
-A: Không sao, bạn không cần hiểu hết. Chỉ cần gửi cho developer hoặc AI agent.
-
-**Q: Làm sao biết developer làm đúng?**
-A: So sánh kết quả với phần "MVP Features" trong spec.md.
-
-**Q: Có thể thay đổi yêu cầu không?**
-A: Có, nhưng nên hoàn thành MVP trước rồi mới thêm tính năng.
-
-**Q: Cần hỗ trợ thêm?**
-A: Chạy lại \`npx aat vibe\` với mô tả mới.
+Cảm ơn!
 
 ---
 
-## Thông Tin Kỹ Thuật (Cho Developer)
+2. **Đính kèm file:** spec.md (trong thư mục này)
 
-- **Run ID:** ${intake.run_id}
-- **Spec Location:** \`artifacts/runs/${intake.run_id}/40_spec/spec.md\`
-- **Tasks Location:** \`artifacts/runs/${intake.run_id}/40_spec/task_breakdown.json\`
-- **Tech Stack đề xuất:** ${techStack.map(t => t.tech).join(', ')}
+3. **Gửi đến developer qua:**
+   - [Freelancer.vn](https://freelancer.vn) - Developer Việt Nam
+   - [TopDev.vn](https://topdev.vn) - Việt Nam
+   - [Upwork.com](https://upwork.com) - Quốc tế
+
+4. **So sánh 2-3 báo giá** rồi chọn người phù hợp
+
+### Mẹo chọn developer:
+- Xem review/đánh giá của khách trước
+- Hỏi họ đã làm app tương tự chưa
+- Yêu cầu họ cho xem app mẫu đã làm
 
 ---
 
-*Tạo bởi AI Agent Toolkit - Vibe Mode | ${new Date().toISOString()}*
+## 🎓 Cách 3: Nhờ bạn bè/người quen
+
+Nếu bạn có bạn bè biết lập trình:
+
+1. Gửi họ file **spec.md**
+2. Nói: "Bạn xem giúp mình có làm được không, mất bao lâu?"
+3. File spec.md có đủ thông tin để họ hiểu và làm
+
+---
+
+## ❓ Câu Hỏi Thường Gặp
+
+**Mình không hiểu file spec.md?**
+→ Không sao! Bạn không cần hiểu. Chỉ cần copy và gửi cho AI hoặc developer.
+
+**Làm sao biết họ làm đúng?**
+→ So sánh app thực tế với danh sách tính năng bạn đã mô tả ban đầu.
+
+**Muốn thay đổi yêu cầu?**
+→ Có thể. Nhưng nên hoàn thành bản đầu tiên trước, rồi mới thêm tính năng.
+
+**Cần hỗ trợ thêm?**
+→ Hỏi ChatGPT: "Tôi có file spec này, giúp tôi tìm developer" và đính kèm file spec.md
+
+---
+
+## 📁 Các File Trong Thư Mục Này
+
+| File | Bạn cần làm gì |
+|------|----------------|
+| **spec.md** | Copy và gửi cho AI/developer |
+| NEXT_STEPS.md | File này - hướng dẫn cho bạn |
+| _(các file khác)_ | Không cần quan tâm - dành cho developer |
+
+---
+
+*Chúc bạn thành công với dự án ${projectName}!*
 `;
 };
 
@@ -1009,24 +1007,18 @@ const runVibe = async () => {
     const nextStepsPath = utils.writeArtifact(runId, 'spec', 'NEXT_STEPS.md', nextSteps);
     console.log(`  ${c.green}✓${c.reset} Saved: ${nextStepsPath}\n`);
 
-    // Summary
+    // Summary (Non-coder friendly - only show 2 essential files)
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
     console.log(`${c.green}${c.bold}   ✅ HOÀN THÀNH!${c.reset}`);
     console.log(`${c.green}${c.bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
 
-    console.log(`${c.bold}Các file đã tạo:${c.reset}`);
-    console.log(`  📄 spec.md           - Specification chi tiết`);
-    console.log(`  📋 task_breakdown.json - Danh sách công việc`);
-    console.log(`  🔒 security_review.md  - Đánh giá bảo mật`);
-    console.log(`  🐳 deploy/            - Dockerfile + docker-compose`);
-    console.log(`  📖 NEXT_STEPS.md      - Hướng dẫn bước tiếp theo\n`);
+    console.log(`${c.bold}Bạn chỉ cần quan tâm 2 file:${c.reset}\n`);
+    console.log(`  ${c.cyan}1. NEXT_STEPS.md${c.reset}  → Đọc file này để biết bước tiếp theo`);
+    console.log(`  ${c.cyan}2. spec.md${c.reset}        → Gửi file này cho AI hoặc developer\n`);
 
-    console.log(`${c.bold}Bước tiếp theo:${c.reset}`);
-    console.log(`  1. Đọc file ${c.cyan}NEXT_STEPS.md${c.reset} để biết cách tiến hành`);
-    console.log(`  2. Gửi file ${c.cyan}spec.md${c.reset} cho developer hoặc AI agent`);
-    console.log(`  3. Dùng ${c.cyan}deploy/${c.reset} để deploy khi code xong\n`);
+    console.log(`${c.dim}(Các file khác trong thư mục là dành cho developer, bạn không cần mở)${c.reset}\n`);
 
-    console.log(`${c.dim}Xem chi tiết: npx aat status ${runId}${c.reset}\n`);
+    console.log(`${c.bold}Mở file NEXT_STEPS.md ngay bây giờ!${c.reset}\n`);
 
     return { runId, intake, spec, tasks, securityReview, deployKit };
 };
