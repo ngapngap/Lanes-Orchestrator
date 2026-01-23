@@ -4,7 +4,7 @@
   "title": "verification.report.json",
   "description": "DoD-based verification report with gates",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": ["run_id", "status", "timestamp"],
   "properties": {
     "run_id": {
@@ -16,6 +16,11 @@
       "type": "string",
       "enum": ["PASS", "FAIL"],
       "description": "Overall verification status"
+    },
+    "overall_status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"],
+      "description": "Backward compatibility field"
     },
     "timestamp": {
       "type": "string",
@@ -44,6 +49,9 @@
           "$ref": "#/$defs/commandsGate"
         },
         "G_SPEC_EXISTS": {
+          "$ref": "#/$defs/gate"
+        },
+        "G_MVP_SIZE": {
           "$ref": "#/$defs/gate"
         }
       }

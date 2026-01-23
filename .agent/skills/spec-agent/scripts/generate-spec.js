@@ -13,6 +13,7 @@ function generateSpec(debate, intake) {
   const project = intake.project || {};
   const scope = intake.scope || {};
   const constraints = intake.constraints || {};
+  const outline = debate.seed_task_outline || [];
 
   let md = `# spec.md
 
@@ -68,51 +69,51 @@ ${debate.options
 - Baseline verification
 
 ### Milestone 1: Core Features
-${debate.seed_task_outline
+${outline
   .filter(t => !['qa', 'security'].includes(t.owner_lane))
   .map(t => `- [${t.owner_lane}] ${t.title}`)
-  .join('\n')}
+  .join('\n') || '- No core tasks'}
 
 ### Milestone 2: Verification
-${debate.seed_task_outline
+${outline
   .filter(t => ['qa', 'security'].includes(t.owner_lane))
   .map(t => `- [${t.owner_lane}] ${t.title}`)
-  .join('\n')}
+  .join('\n') || '- Standard QA'}
 
 ---
 
 ## Tasks by Lane
 
 ### UI Lane
-${debate.seed_task_outline
+${outline
   .filter(t => t.owner_lane === 'ui')
   .map(t => `- [ ] ${t.title}
   - Acceptance: ${t.acceptance.join(', ')}`)
   .join('\n') || '- No UI tasks'}
 
 ### API Lane
-${debate.seed_task_outline
+${outline
   .filter(t => t.owner_lane === 'api')
   .map(t => `- [ ] ${t.title}
   - Acceptance: ${t.acceptance.join(', ')}`)
   .join('\n') || '- No API tasks'}
 
 ### Data Lane
-${debate.seed_task_outline
+${outline
   .filter(t => t.owner_lane === 'data')
   .map(t => `- [ ] ${t.title}
   - Acceptance: ${t.acceptance.join(', ')}`)
   .join('\n') || '- No Data tasks'}
 
 ### QA Lane
-${debate.seed_task_outline
+${outline
   .filter(t => t.owner_lane === 'qa')
   .map(t => `- [ ] ${t.title}
   - Acceptance: ${t.acceptance.join(', ')}`)
   .join('\n') || '- Standard QA per qa.md'}
 
 ### Security Lane
-${debate.seed_task_outline
+${outline
   .filter(t => t.owner_lane === 'security')
   .map(t => `- [ ] ${t.title}
   - Acceptance: ${t.acceptance.join(', ')}`)

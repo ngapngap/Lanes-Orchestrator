@@ -129,7 +129,9 @@ const checkDeliverable = (projectPath, deliverablePath) => {
         const fullDir = path.join(projectPath, dir === '.' ? '' : dir);
         if (!fs.existsSync(fullDir)) return false;
         const files = fs.readdirSync(fullDir);
-        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        // Escape regex special characters except *
+        const escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        const regex = new RegExp('^' + escapedPattern + '$');
         return files.some(f => regex.test(f));
     }
 
@@ -148,12 +150,18 @@ const runCommand = (cmd, projectPath, timeoutMs = 60000) => {
     });
 
     return {
-        command: cmd,
-        exitCode: result.status,
+        name: cmd.split(' ')[0], // Add name for schema compliance
+        cmd: cmd,
+        command: cmd, // Keep for backward compatibility
+        exit_code: result.status,
+        exitCode: result.status, // Keep for backward compatibility
         stdout: result.stdout || '',
         stderr: result.stderr || '',
-        durationMs: Date.now() - startTime,
-        passed: result.status === 0
+        output: result.stdout || result.stderr || '', // Add output for commandsGate schema
+        duration_ms: Date.now() - startTime,
+        durationMs: Date.now() - startTime, // Keep for backward compatibility
+        passed: result.status === 0, // Add passed for commandsGate schema
+        success: result.status === 0 // Keep for backward compatibility
     };
 };
 
@@ -372,8 +380,9 @@ const runVerify = async () => {
     // Initialize report
     const report = {
         run_id: runId,
+        status: 'PASS', // Align with status field in schema
+        overall_status: 'PASS', // Keep for backward compatibility
         timestamp: new Date().toISOString(),
-        status: 'PASS',
         gates: {}, // Change from [] to {} (DoD vNext Fix)
         commands: [],
         violations: [],
@@ -529,6 +538,7 @@ const runVerify = async () => {
     report.summary.failedCount = failedGates.length;
     report.summary.passedCount = gateValues.length - failedGates.length;
     report.status = failedGates.length > 0 ? 'FAIL' : 'PASS';
+    report.overall_status = report.status;
 
     if (report.status === 'FAIL') {
         report.summary.nextAction = `run npx aat fix --run-id ${runId}`;
@@ -547,7 +557,7 @@ const runVerify = async () => {
         console.log(JSON.stringify(report, null, 2));
     } else {
         console.log(`${c.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
-        if (report.status === 'PASS') {
+        if (report.overall_status === 'PASS') {
             console.log(`${c.green}${c.bold}✓ PASS${c.reset} - All gates passed`);
         } else {
             console.log(`${c.red}${c.bold}✗ FAIL${c.reset} - ${failedGates.length} gate(s) failed`);
@@ -557,7 +567,7 @@ const runVerify = async () => {
         console.log(`\nReport: ${c.dim}${path.join(verifyDir, 'verification.report.json')}${c.reset}\n`);
     }
 
-    process.exit(report.status === 'PASS' ? 0 : 1);
+    process.exit(report.overall_status === 'PASS' ? 0 : 1);
 };
 
 // Run

@@ -8,12 +8,12 @@
 const fs = require('fs');
 const path = require('path');
 
-function generateTaskBreakdown(debate) {
+function generateTaskBreakdown(debate, runId = 'latest') {
   const tasks = [];
   const milestones = [];
 
   // Generate tasks from seed_task_outline
-  debate.seed_task_outline.forEach((seed, index) => {
+  (debate.seed_task_outline || []).forEach((seed, index) => {
     const nodeId = `${seed.owner_lane}-${String(index + 1).padStart(3, '0')}`;
 
     tasks.push({
@@ -22,8 +22,8 @@ function generateTaskBreakdown(debate) {
       owner_lane: seed.owner_lane,
       depends_on: [],
       parallel_group: index < 2 ? 'foundation' : 'core',
-      inputs: ['artifacts/runs/<run_id>/40_spec/spec.md'],
-      artifact_out: [`artifacts/runs/<run_id>/50_implementation/handoff/${seed.owner_lane}/README.md`],
+      inputs: [`artifacts/runs/${runId}/40_spec/spec.md`],
+      artifact_out: [`artifacts/runs/${runId}/50_implementation/handoff/${seed.owner_lane}/README.md`],
       exit_criteria: seed.acceptance,
       validation_cmd: ['npm test'],
       rollback_plan: 'Revert related commits'
@@ -70,6 +70,8 @@ function generateTaskBreakdown(debate) {
   return {
     milestones,
     tasks,
+    total_tasks: tasks.length,
+    estimated_total_hours: tasks.length * 2,
     provenance: {
       timestamp: new Date().toISOString(),
       commit_hash: '<generated>'

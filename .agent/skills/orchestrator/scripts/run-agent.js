@@ -25,6 +25,10 @@ const debugInput = args.indexOf('--debug-input') !== -1;
 const idIndex = args.indexOf('--id');
 let agentId = idIndex !== -1 ? args[idIndex + 1] : null;
 
+// Parse runId from environment or args
+const runIdIndex = args.indexOf('--run-id');
+let runId = runIdIndex !== -1 ? args[runIdIndex + 1] : (process.env.RUN_ID || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19));
+
 // Validate and normalize agentId
 if (!agentId) {
     console.error('[SYSTEM] Error: --id is required.');
@@ -41,8 +45,6 @@ if (!/^[a-z0-9_-]{1,32}$/.test(agentId) || agentId.includes('..') || agentId.inc
 const autoYesIndex = args.indexOf('--auto-yes');
 const autoYes = autoYesIndex !== -1;
 
-// Define and sanitize runId
-let runId = process.env.RUN_ID || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 // Sanitize runId to prevent path traversal
 runId = runId.replace(/[\\/]/g, '_');
 if (runId.includes('..')) {
@@ -50,11 +52,12 @@ if (runId.includes('..')) {
     process.exit(1);
 }
 
-const LOG_DIR = path.join(process.cwd(), '.agent', 'logs', runId, agentId);
+// LOG_DIR should use cwd if provided, otherwise process.cwd()
+const LOG_DIR = path.join(cwd, '.agent', 'logs', runId, agentId);
 
-// Ensure LOG_DIR is within the expected path
+// Ensure LOG_DIR is within the expected path (relative to cwd)
 const resolvedLogDir = path.resolve(LOG_DIR);
-const expectedBaseDir = path.resolve(path.join(process.cwd(), '.agent', 'logs'));
+const expectedBaseDir = path.resolve(path.join(cwd, '.agent', 'logs'));
 if (!resolvedLogDir.startsWith(expectedBaseDir)) {
     console.error('[SYSTEM] Error: Path traversal detected in log directory.');
     process.exit(1);

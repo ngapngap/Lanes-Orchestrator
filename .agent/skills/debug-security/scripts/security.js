@@ -34,7 +34,13 @@ function runDependencyAudit(projectPath = '.') {
       execSync('npm audit --json', { cwd: projectPath, encoding: 'utf8', stdio: 'pipe' });
       results.npm = { status: 'pass' };
     } catch (error) {
-      const audit = JSON.parse(error.stdout || '{}');
+      let audit = {};
+      try {
+        audit = JSON.parse(error.stdout || '{}');
+      } catch (e) {
+        // Fallback if stdout is not valid JSON
+        audit = { metadata: { vulnerabilities: { critical: 1, high: 1, moderate: 1 } } }; // Assume worst case if parsing fails
+      }
       const critical = audit.metadata?.vulnerabilities?.critical || 0;
       const high = audit.metadata?.vulnerabilities?.high || 0;
       results.npm = {

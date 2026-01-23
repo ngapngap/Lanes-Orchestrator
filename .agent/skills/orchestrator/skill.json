@@ -7,7 +7,12 @@
       "script": "scripts/vibe.js",
       "description": "One-command pipeline for non-technical users",
       "args": [
-        { "name": "description", "type": "string", "description": "Project description (optional)" }
+        { "name": "description", "type": "string", "description": "Project description (optional)" },
+        { "name": "--yes", "type": "boolean", "description": "Auto-confirm summary and proceed" },
+        { "name": "--full", "type": "boolean", "description": "Auto-run full implementation pipeline" },
+        { "name": "--max-attempts", "type": "number", "description": "Max fix attempts (default: 3)" },
+        { "name": "--time-budget-min", "type": "number", "description": "Time budget in minutes (default: 30)" },
+        { "name": "--fast", "type": "boolean", "description": "Stop at spec generation" }
       ]
     },
     "selfcheck": {

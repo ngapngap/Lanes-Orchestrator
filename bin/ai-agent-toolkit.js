@@ -234,6 +234,8 @@ ${c.cyan}USAGE${c.reset}
 ${c.magenta}VIBE MODE${c.reset} ${c.dim}(Recommended for beginners)${c.reset}
   ${c.green}vibe${c.reset}                  One-command pipeline: describe → get spec
   ${c.green}vibe${c.reset} "description"    Skip intro, start with your idea
+  ${c.green}vibe${c.reset} --full           Full cycle: Spec → Code → Audit → Fix
+  ${c.green}vibe${c.reset} --yes            Auto-confirm and proceed
 
 ${c.cyan}ADVANCED MODE${c.reset} ${c.dim}(Step-by-step control)${c.reset}
   ${c.green}init${c.reset} <slug>           Initialize a new pipeline run
@@ -248,6 +250,7 @@ ${c.cyan}QUALITY${c.reset}
   ${c.green}test${c.reset}                  Generate tests
   ${c.green}qa${c.reset}                    Run QA gate
   ${c.green}fix${c.reset}                   Apply auto-fixes for QA issues
+  ${c.green}loop${c.reset}                  Run verify -> fix -> verify loop
 
 ${c.cyan}MANAGEMENT${c.reset}
   ${c.green}install${c.reset}               Scaffold toolkit into current project
@@ -258,11 +261,14 @@ ${c.cyan}MANAGEMENT${c.reset}
 
 ${c.cyan}OPTIONS${c.reset}
   --run-id <id>         Specify run ID
+  --yes                 Skip confirmation prompts
+  --full                Run full implementation pipeline
+  --max-attempts <n>    Max fix attempts (default: 3)
   --help, -h            Show help
 
 ${c.cyan}EXAMPLES${c.reset}
   ${c.magenta}npx aat vibe${c.reset}                         # Start vibe mode (interactive)
-  ${c.magenta}npx aat vibe "app đặt lịch nail"${c.reset}     # Vibe with initial description
+  ${c.magenta}npx aat vibe "app đặt lịch nail" --full${c.reset}  # Vibe with full implementation
   npx aat init my-project              # Advanced: init run
   npx aat research --query "auth"      # Advanced: search repos
 

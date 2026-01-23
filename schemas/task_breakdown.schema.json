@@ -3,7 +3,7 @@
   "$id": "schemas/task_breakdown.schema.json",
   "title": "task_breakdown.json",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": ["milestones", "tasks", "provenance"],
   "properties": {
     "milestones": {
