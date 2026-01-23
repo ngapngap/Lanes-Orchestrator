@@ -19,7 +19,15 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-// Find repo root
+// Get the toolkit package root (where this CLI lives)
+// This is the source for install command
+const getPackageRoot = () => {
+  // __dirname is bin/, so package root is parent
+  return path.dirname(__dirname);
+};
+
+// Find repo/project root (where AGENTS.md exists, or cwd if not found)
+// This is the target for running commands
 const findRepoRoot = () => {
   let dir = process.cwd();
   while (dir !== path.dirname(dir)) {
@@ -31,6 +39,13 @@ const findRepoRoot = () => {
   return process.cwd();
 };
 
+// Determine if running from node_modules (npm package)
+const isRunningAsPackage = () => {
+  const pkgRoot = getPackageRoot();
+  return pkgRoot.includes('node_modules');
+};
+
+const PACKAGE_ROOT = getPackageRoot();
 const REPO_ROOT = findRepoRoot();
 const SKILLS_DIR = path.join(REPO_ROOT, '.agent', 'skills');
 const LIB_DIR = path.join(REPO_ROOT, '.agent', 'lib');
@@ -44,6 +59,7 @@ const c = {
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
+  magenta: '\x1b[35m',
   cyan: '\x1b[36m',
   white: '\x1b[37m'
 };
@@ -138,6 +154,7 @@ const buildCommandRegistry = (skills) => {
   registry.shortcuts = {
     'vibe': 'orchestrator:vibe',
     'selfcheck': 'orchestrator:selfcheck',
+    'fix': 'orchestrator:fix',
     'intake': 'intake:start',
     'research': 'research:search',
     'debate': 'debate:run',
@@ -219,6 +236,7 @@ ${c.cyan}QUALITY${c.reset}
   ${c.green}review${c.reset}                Run code review
   ${c.green}test${c.reset}                  Generate tests
   ${c.green}qa${c.reset}                    Run QA gate
+  ${c.green}fix${c.reset}                   Apply auto-fixes for QA issues
 
 ${c.cyan}MANAGEMENT${c.reset}
   ${c.green}install${c.reset}               Scaffold toolkit into current project
@@ -271,10 +289,20 @@ ${c.dim}See 'npx aat skills' for all available skill commands${c.reset}
     log.header('Installing AI Agent Toolkit');
 
     const targetDir = args.options.path || process.cwd();
-    const sourceDir = REPO_ROOT;
 
-    // Check if we're in the source repo
-    if (targetDir === sourceDir) {
+    // Source is ALWAYS the package root (where CLI lives)
+    // Not REPO_ROOT (which could be cwd if no AGENTS.md)
+    const sourceDir = PACKAGE_ROOT;
+
+    // Check if source has the required files
+    if (!fs.existsSync(path.join(sourceDir, 'AGENTS.md'))) {
+      log.error('Invalid toolkit package: AGENTS.md not found in source.');
+      log.info(`Source: ${sourceDir}`);
+      return 1;
+    }
+
+    // Check if we're in the source repo itself (not npm package)
+    if (!isRunningAsPackage() && path.resolve(targetDir) === path.resolve(sourceDir)) {
       log.warn('You are in the toolkit repo itself.');
       log.info('To use in another project: cd /your/project && npx ai-agent-toolkit install');
       return 1;

@@ -28,6 +28,16 @@
       "args": [
         { "name": "--run-id", "type": "string", "description": "Run ID" }
       ]
+    },
+    "fix": {
+      "script": "scripts/fix.js",
+      "description": "Apply auto-fixes for QA blocking issues",
+      "args": [
+        { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--approve-change", "type": "boolean", "description": "Approve spec change and reset counter" },
+        { "name": "--rerun-qa", "type": "boolean", "description": "Re-run QA after fixes" },
+        { "name": "--dry-run", "type": "boolean", "description": "Show what would be fixed without applying" }
+      ]
     }
   },
   "triggers": ["vibe", "selfcheck", "init run", "/status"],
