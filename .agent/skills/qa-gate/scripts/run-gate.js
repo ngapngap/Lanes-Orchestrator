@@ -2,20 +2,68 @@
 /**
  * Run QA Gate Script
  * Chạy tất cả verification checks
+ *
+ * Outputs to: artifacts/runs/<run_id>/60_verification/
  */
 
 const fs = require('fs');
 const path = require('path');
-const { execSync, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
-const OUTPUT_DIR = path.resolve(__dirname, '../../../../output/verification');
-const REPORT_FILE = path.join(OUTPUT_DIR, 'report.json');
-const TESTS_MD_FILE = path.join(OUTPUT_DIR, 'tests.md');
+// Import utils for artifact paths
+const REPO_ROOT = (() => {
+    let dir = __dirname;
+    while (dir !== path.dirname(dir)) {
+        if (fs.existsSync(path.join(dir, 'AGENTS.md'))) return dir;
+        dir = path.dirname(dir);
+    }
+    return process.cwd();
+})();
 
-// Ensure output directory exists
-if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+let utils;
+try {
+    utils = require(path.join(REPO_ROOT, '.agent/lib/utils.js'));
+} catch (e) {
+    utils = {
+        getArtifactPath: (runId, phase) => {
+            const phases = { 'verification': '60_verification' };
+            return path.join(REPO_ROOT, 'artifacts', 'runs', runId, phases[phase] || phase);
+        },
+        writeArtifact: (runId, phase, filename, content) => {
+            const phasePath = utils.getArtifactPath(runId, phase);
+            if (!fs.existsSync(phasePath)) {
+                fs.mkdirSync(phasePath, { recursive: true });
+            }
+            const filePath = path.join(phasePath, filename);
+            const data = typeof content === 'object' ? JSON.stringify(content, null, 2) : content;
+            fs.writeFileSync(filePath, data, 'utf8');
+            return filePath;
+        },
+        getLatestRunId: () => {
+            const runsDir = path.join(REPO_ROOT, 'artifacts', 'runs');
+            if (!fs.existsSync(runsDir)) return null;
+            const runs = fs.readdirSync(runsDir).sort().reverse();
+            return runs[0] || null;
+        }
+    };
 }
+
+// Parse args
+const parseArgs = () => {
+    const args = process.argv.slice(2);
+    const options = {};
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--run-id' && args[i + 1]) options.runId = args[++i];
+        else if (args[i] === '--policy' && args[i + 1]) options.policy = args[++i];
+        else if (args[i] === '--checks' && args[i + 1]) options.checks = args[++i];
+        else if (args[i] === '--path' && args[i + 1]) options.path = args[++i];
+        else if (args[i] === '--strict') options.strict = true;
+    }
+    return options;
+};
+
+const options = parseArgs();
+const RUN_ID = options.runId || process.env.RUN_ID || utils.getLatestRunId();
 
 // Detect project configuration
 const detectConfig = (projectPath) => {
@@ -85,7 +133,6 @@ const parseTestResults = (output, runner) => {
         failed_tests: []
     };
 
-    // Vitest/Jest pattern
     const summaryMatch = output.match(/Tests:\s+(\d+)\s+passed.*?(\d+)\s+total/s) ||
                         output.match(/(\d+)\s+passed,\s+(\d+)\s+total/);
     const failMatch = output.match(/(\d+)\s+failed/);
@@ -98,7 +145,6 @@ const parseTestResults = (output, runner) => {
         result.failed = parseInt(failMatch[1]) || 0;
     }
 
-    // Extract failed test names
     const failedTestMatches = output.matchAll(/FAIL\s+(.+?)\n|✕\s+(.+)/g);
     for (const match of failedTestMatches) {
         result.failed_tests.push({
@@ -131,7 +177,7 @@ const parseLintResults = (output, tool) => {
 };
 
 // Main QA gate function
-const runQAGate = async (options = {}) => {
+const runQAGate = async () => {
     const projectPath = options.path || process.cwd();
     const policy = options.policy || process.env.QA_POLICY || 'standard';
     const checksToRun = options.checks ? options.checks.split(',') : ['tests', 'lint', 'typecheck', 'build'];
@@ -141,6 +187,7 @@ const runQAGate = async (options = {}) => {
     console.log('========================================\n');
     console.log(`Project: ${projectPath}`);
     console.log(`Policy: ${policy}`);
+    if (RUN_ID) console.log(`Run ID: ${RUN_ID}`);
     console.log(`Checks: ${checksToRun.join(', ')}\n`);
 
     const config = detectConfig(projectPath);
@@ -152,6 +199,8 @@ const runQAGate = async (options = {}) => {
     console.log(`  Package Manager: ${config.packageManager}\n`);
 
     const report = {
+        version: '1.0',
+        run_id: RUN_ID || null,
         timestamp: new Date().toISOString(),
         project: {
             name: path.basename(projectPath),
@@ -287,19 +336,29 @@ const runQAGate = async (options = {}) => {
         report.overall_status = 'fail';
     } else if (report.summary.warnings > 0) {
         report.overall_status = 'warning';
+    } else if (report.summary.total_checks === 0) {
+        report.overall_status = 'skip';
+        report.recommendations.push('No checks were run. Configure tests/lint/build in package.json');
     } else {
         report.overall_status = 'pass';
     }
 
-    // Save report
-    fs.writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2), 'utf8');
+    // Save artifacts
+    if (RUN_ID) {
+        const reportPath = utils.writeArtifact(RUN_ID, 'verification', 'report.json', report);
+        const markdown = generateMarkdownReport(report);
+        const summaryPath = utils.writeArtifact(RUN_ID, 'verification', 'summary.md', markdown);
 
-    // Generate markdown report
-    const markdown = generateMarkdownReport(report);
-    fs.writeFileSync(TESTS_MD_FILE, markdown, 'utf8');
+        console.log(`\n[OK] Reports saved to:`);
+        console.log(`  - ${reportPath}`);
+        console.log(`  - ${summaryPath}`);
+    } else {
+        console.log('\n[INFO] No RUN_ID specified, skipping artifact save.');
+        console.log('       Use --run-id or set RUN_ID env var to save artifacts.');
+    }
 
     // Print summary
-    console.log('========================================');
+    console.log('\n========================================');
     console.log('   SUMMARY');
     console.log('========================================\n');
     console.log(`Overall Status: ${report.overall_status.toUpperCase()}`);
@@ -310,7 +369,6 @@ const runQAGate = async (options = {}) => {
             console.log(`  - [${issue.check}] ${issue.message}`);
         });
     }
-    console.log(`\nReports saved to: ${OUTPUT_DIR}`);
 
     return report.overall_status === 'pass' || report.overall_status === 'warning';
 };
@@ -330,13 +388,16 @@ const generateMarkdownReport = (report) => {
 
     return `# QA Verification Report
 
+## Run Info
+- **Run ID**: ${report.run_id || 'N/A'}
+- **Timestamp**: ${report.timestamp}
+- **Overall Status**: ${report.overall_status.toUpperCase()}
+
 ## Summary
 
 | Check | Status | Details |
 |-------|--------|---------|
-${checkRows}
-
-**Overall Status**: ${report.overall_status.toUpperCase()}
+${checkRows || '| - | - | No checks run |'}
 
 ---
 
@@ -360,24 +421,6 @@ ${report.recommendations.length > 0 ?
 `;
 };
 
-// Parse args
-const args = process.argv.slice(2);
-const options = {};
-for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--policy' && args[i + 1]) {
-        options.policy = args[i + 1];
-        i++;
-    }
-    if (args[i] === '--checks' && args[i + 1]) {
-        options.checks = args[i + 1];
-        i++;
-    }
-    if (args[i] === '--path' && args[i + 1]) {
-        options.path = args[i + 1];
-        i++;
-    }
-}
-
-runQAGate(options).then(success => {
+runQAGate().then(success => {
     process.exit(success ? 0 : 1);
 });
