@@ -1,0 +1,28 @@
+{
+  "name": "research",
+  "version": "1.0.0",
+  "description": "Research and discovery of existing solutions",
+  "commands": {
+    "search": {
+      "script": "scripts/search-github.js",
+      "description": "Search GitHub for similar repos",
+      "args": [
+        { "name": "--query", "type": "string", "description": "Search query" },
+        { "name": "--limit", "type": "number", "description": "Max results", "default": 10 }
+      ]
+    },
+    "assess": {
+      "script": "scripts/assess-reuse.js",
+      "description": "Assess reuse potential of candidates",
+      "args": [
+        { "name": "--input", "type": "string", "description": "Shortlist file" }
+      ]
+    }
+  },
+  "triggers": ["research", "search repos", "/research"],
+  "outputs": [
+    "20_research/research.shortlist.json",
+    "20_research/research.reuse_assessment.json",
+    "20_research/research.patterns.md"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "code-review",
+  "version": "1.0.0",
+  "description": "Automated code review with security, quality, and standards checks",
+  "commands": {
+    "review": {
+      "script": "review.js",
+      "description": "Run code review on files or directory",
+      "args": [
+        { "name": "--path", "type": "string", "description": "Path to review", "default": "." },
+        { "name": "--run-id", "type": "string", "description": "Run ID for artifacts" }
+      ]
+    }
+  },
+  "triggers": ["review code", "code review", "/review"],
+  "outputs": [
+    "60_verification/review.summary.json",
+    "60_verification/review.issues.json",
+    "60_verification/review.md"
+  ]
+}

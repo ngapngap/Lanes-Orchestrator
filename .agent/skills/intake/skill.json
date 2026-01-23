@@ -1,0 +1,20 @@
+{
+  "name": "intake",
+  "version": "1.0.0",
+  "description": "Requirements gathering and project intake",
+  "commands": {
+    "start": {
+      "script": "scripts/start-intake.js",
+      "description": "Start interactive intake session",
+      "args": [
+        { "name": "--quick", "type": "boolean", "description": "Quick mode (skip prompts)" },
+        { "name": "--name", "type": "string", "description": "Project name" }
+      ]
+    }
+  },
+  "triggers": ["intake", "gather requirements", "/intake"],
+  "outputs": [
+    "10_intake/intake.json",
+    "10_intake/intake.summary.md"
+  ]
+}

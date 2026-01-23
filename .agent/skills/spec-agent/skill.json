@@ -1,0 +1,26 @@
+{
+  "name": "spec-agent",
+  "version": "1.0.0",
+  "description": "Specification and task breakdown generation",
+  "commands": {
+    "spec": {
+      "script": "scripts/generate-spec.js",
+      "description": "Generate spec.md from debate decisions",
+      "args": [
+        { "name": "--debate", "type": "string", "description": "Debate input file" }
+      ]
+    },
+    "tasks": {
+      "script": "scripts/generate-tasks.js",
+      "description": "Generate task_breakdown.json DAG",
+      "args": [
+        { "name": "--debate", "type": "string", "description": "Debate input file" }
+      ]
+    }
+  },
+  "triggers": ["generate spec", "create tasks", "/spec"],
+  "outputs": [
+    "40_spec/spec.md",
+    "40_spec/task_breakdown.json"
+  ]
+}

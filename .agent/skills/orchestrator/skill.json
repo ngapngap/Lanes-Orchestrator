@@ -1,0 +1,28 @@
+{
+  "name": "orchestrator",
+  "version": "1.0.0",
+  "description": "Pipeline orchestration and environment management",
+  "commands": {
+    "selfcheck": {
+      "script": "scripts/selfcheck.js",
+      "description": "Validate environment setup",
+      "args": []
+    },
+    "init": {
+      "script": "scripts/init-run.js",
+      "description": "Initialize a new pipeline run",
+      "args": [
+        { "name": "--slug", "type": "string", "description": "Project slug" }
+      ]
+    },
+    "status": {
+      "script": "scripts/run-status.js",
+      "description": "Show run status",
+      "args": [
+        { "name": "--run-id", "type": "string", "description": "Run ID" }
+      ]
+    }
+  },
+  "triggers": ["selfcheck", "init run", "/status"],
+  "outputs": []
+}

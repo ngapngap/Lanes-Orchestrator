@@ -1,0 +1,20 @@
+{
+  "name": "qa-gate",
+  "version": "1.0.0",
+  "description": "Quality assurance gate validation",
+  "commands": {
+    "run": {
+      "script": "scripts/run-gate.js",
+      "description": "Run QA gate checks",
+      "args": [
+        { "name": "--run-id", "type": "string", "description": "Run ID" },
+        { "name": "--strict", "type": "boolean", "description": "Strict mode (fail on warnings)" }
+      ]
+    }
+  },
+  "triggers": ["qa gate", "run qa", "/qa"],
+  "outputs": [
+    "60_verification/report.json",
+    "60_verification/summary.md"
+  ]
+}

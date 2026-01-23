@@ -1,0 +1,20 @@
+{
+  "name": "test-generator",
+  "version": "1.0.0",
+  "description": "AI-powered test generation from specs and source code",
+  "commands": {
+    "generate": {
+      "script": "generate.js",
+      "description": "Generate tests from source files or spec",
+      "args": [
+        { "name": "--src", "type": "string", "description": "Source directory", "default": "src" },
+        { "name": "--run-id", "type": "string", "description": "Run ID for artifacts" }
+      ]
+    }
+  },
+  "triggers": ["generate tests", "create tests", "/test"],
+  "outputs": [
+    "50_implementation/tests/",
+    "60_verification/test.manifest.json"
+  ]
+}

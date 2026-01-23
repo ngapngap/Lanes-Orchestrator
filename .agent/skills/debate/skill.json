@@ -1,0 +1,19 @@
+{
+  "name": "debate",
+  "version": "1.0.0",
+  "description": "Council-style decision making with scoring rubric",
+  "commands": {
+    "run": {
+      "script": "scripts/debate.js",
+      "description": "Run debate session on options",
+      "args": [
+        { "name": "--input", "type": "string", "description": "Shortlist input file" }
+      ]
+    }
+  },
+  "triggers": ["debate", "council decision", "/debate"],
+  "outputs": [
+    "30_debate/debate.inputs_for_spec.json",
+    "30_debate/debate.decision.md"
+  ]
+}
