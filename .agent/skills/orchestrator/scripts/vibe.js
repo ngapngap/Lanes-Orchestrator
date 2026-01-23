@@ -738,123 +738,79 @@ docker-compose exec -T db psql -U postgres ${projectName} < backup.sql
     };
 };
 
-// Generate NEXT_STEPS.md (Non-coder friendly - NO technical terms)
+// Generate NEXT_STEPS.md (For users already in IDE - Claude Code, Cursor, etc.)
 const generateNextSteps = (intake, tasks) => {
     const totalHours = tasks.estimated_total_hours;
     const projectName = intake.project.name;
-    const costVND = Math.ceil(totalHours * 500000); // ~500k VND/hour estimate
-    const costUSD = Math.ceil(totalHours * 25);
+    const taskCount = tasks.total_tasks;
 
-    return `# ${projectName} - Hướng Dẫn Tiếp Theo
+    return `# ${projectName} - Bước Tiếp Theo
 
-## ✅ Bạn đã hoàn thành bước mô tả!
+## ✅ Hoàn thành! Đã tạo xong bản thiết kế.
 
-Chúng tôi đã tạo xong **bản thiết kế chi tiết** cho dự án của bạn.
-Bây giờ bạn cần chọn cách để biến thiết kế thành app thực tế.
+Bây giờ bạn có thể bắt đầu code ngay trong IDE này.
 
 ---
 
-## 🚀 Cách 1: Dùng AI tạo app (NHANH NHẤT)
+## 🚀 Cách làm (Ngay trong IDE)
 
-**Thời gian:** 5-30 phút | **Chi phí:** Miễn phí hoặc ~$20/tháng
+### Bước 1: Yêu cầu AI tạo code
 
-### Bước làm:
+Gõ vào chat của IDE (Claude Code, Cursor, Windsurf...):
 
-1. **Mở trang web:** Vào một trong các trang sau:
-   - [lovable.dev](https://lovable.dev) - Tạo app web đẹp
-   - [bolt.new](https://bolt.new) - Tạo app nhanh
-   - [v0.dev](https://v0.dev) - Tạo giao diện đẹp
+> Đọc file spec.md và bắt đầu implement từ task đầu tiên
 
-2. **Đăng nhập** bằng Google hoặc email
+### Bước 2: Theo dõi tiến độ
 
-3. **Mở file spec.md** trong thư mục này (dùng Notepad hoặc bất kỳ app đọc văn bản)
+AI sẽ tự động:
+- Tạo project structure
+- Implement từng tính năng trong spec
+- Chạy test và fix lỗi
 
-4. **Copy toàn bộ nội dung** (Ctrl+A rồi Ctrl+C)
+Bạn chỉ cần xem và confirm khi AI hỏi.
 
-5. **Paste vào ô chat** của trang web (Ctrl+V)
+### Bước 3: Chạy thử
 
-6. **Nhấn Enter** và đợi 2-5 phút
+Khi AI báo xong, gõ:
 
-7. **App của bạn sẽ xuất hiện!** Bạn có thể xem trước và chỉnh sửa ngay trên trang.
-
----
-
-## 💼 Cách 2: Thuê người làm
-
-**Thời gian:** 1-4 tuần | **Chi phí:** ${(costVND/1000000).toFixed(1)}-${(costVND*2/1000000).toFixed(1)} triệu VND (~$${costUSD}-$${costUSD*2})
-
-### Bước làm:
-
-1. **Copy tin nhắn mẫu này:**
+> Chạy app để test thử
 
 ---
 
-Chào anh/chị,
+## 📋 Danh sách công việc
 
-Em cần làm ${projectName}. Em đã có bản thiết kế chi tiết (file đính kèm).
+Có **${taskCount} tasks** cần làm (~${totalHours} giờ ước tính):
 
-Yêu cầu chính:
-${intake.scope.mvp_features.slice(0, 5).map(f => `- ${f}`).join('\n')}
-
-Anh/chị xem và báo giá + thời gian giúp em nhé.
-
-Cảm ơn!
+${tasks.tasks.slice(0, 7).map((t, i) => `${i + 1}. ${t.name}`).join('\n')}
+${tasks.tasks.length > 7 ? `\n_(và ${tasks.tasks.length - 7} tasks khác)_` : ''}
 
 ---
 
-2. **Đính kèm file:** spec.md (trong thư mục này)
+## 📁 Các file đã tạo
 
-3. **Gửi đến developer qua:**
-   - [Freelancer.vn](https://freelancer.vn) - Developer Việt Nam
-   - [TopDev.vn](https://topdev.vn) - Việt Nam
-   - [Upwork.com](https://upwork.com) - Quốc tế
-
-4. **So sánh 2-3 báo giá** rồi chọn người phù hợp
-
-### Mẹo chọn developer:
-- Xem review/đánh giá của khách trước
-- Hỏi họ đã làm app tương tự chưa
-- Yêu cầu họ cho xem app mẫu đã làm
+| File | Mục đích |
+|------|----------|
+| **spec.md** | Bản thiết kế chi tiết - AI đọc file này để code |
+| **task_breakdown.json** | Danh sách việc cần làm |
+| **security_review.md** | Checklist bảo mật |
+| **deploy/** | Files để deploy khi code xong |
 
 ---
 
-## 🎓 Cách 3: Nhờ bạn bè/người quen
+## ❓ Gặp vấn đề?
 
-Nếu bạn có bạn bè biết lập trình:
+**AI làm sai so với yêu cầu?**
+→ Nói: "Dừng lại, đọc lại spec.md phần [tên tính năng]"
 
-1. Gửi họ file **spec.md**
-2. Nói: "Bạn xem giúp mình có làm được không, mất bao lâu?"
-3. File spec.md có đủ thông tin để họ hiểu và làm
+**Muốn thêm tính năng?**
+→ Hoàn thành MVP trước, rồi mới thêm sau
 
----
-
-## ❓ Câu Hỏi Thường Gặp
-
-**Mình không hiểu file spec.md?**
-→ Không sao! Bạn không cần hiểu. Chỉ cần copy và gửi cho AI hoặc developer.
-
-**Làm sao biết họ làm đúng?**
-→ So sánh app thực tế với danh sách tính năng bạn đã mô tả ban đầu.
-
-**Muốn thay đổi yêu cầu?**
-→ Có thể. Nhưng nên hoàn thành bản đầu tiên trước, rồi mới thêm tính năng.
-
-**Cần hỗ trợ thêm?**
-→ Hỏi ChatGPT: "Tôi có file spec này, giúp tôi tìm developer" và đính kèm file spec.md
+**Muốn deploy?**
+→ Xem file deploy/DEPLOY.md
 
 ---
 
-## 📁 Các File Trong Thư Mục Này
-
-| File | Bạn cần làm gì |
-|------|----------------|
-| **spec.md** | Copy và gửi cho AI/developer |
-| NEXT_STEPS.md | File này - hướng dẫn cho bạn |
-| _(các file khác)_ | Không cần quan tâm - dành cho developer |
-
----
-
-*Chúc bạn thành công với dự án ${projectName}!*
+*Dự án: ${projectName} | Tasks: ${taskCount} | Est: ${totalHours}h*
 `;
 };
 
