@@ -136,6 +136,7 @@ const buildCommandRegistry = (skills) => {
 
   // Common shortcuts
   registry.shortcuts = {
+    'vibe': 'orchestrator:vibe',
     'selfcheck': 'orchestrator:selfcheck',
     'intake': 'intake:start',
     'research': 'research:search',
@@ -200,18 +201,21 @@ ${c.bold}AI Agent Toolkit${c.reset} - Unified CLI for AI-powered development pip
 
 ${c.cyan}USAGE${c.reset}
   npx ai-agent-toolkit <command> [options]
-  npx ai-agent-toolkit <skill>:<command> [options]
   npx aat <command> [options]
 
-${c.cyan}PIPELINE COMMANDS${c.reset}
+${c.magenta}VIBE MODE${c.reset} ${c.dim}(Recommended for beginners)${c.reset}
+  ${c.green}vibe${c.reset}                  One-command pipeline: describe → get spec
+  ${c.green}vibe${c.reset} "description"    Skip intro, start with your idea
+
+${c.cyan}ADVANCED MODE${c.reset} ${c.dim}(Step-by-step control)${c.reset}
   ${c.green}init${c.reset} <slug>           Initialize a new pipeline run
   ${c.green}intake${c.reset}                Start requirements gathering
-  ${c.green}research${c.reset} [query]      Search for repos/patterns
+  ${c.green}research${c.reset}              Search for repos/patterns
   ${c.green}debate${c.reset}                Run council decision
   ${c.green}spec${c.reset}                  Generate specification
   ${c.green}tasks${c.reset}                 Generate task breakdown
 
-${c.cyan}QUALITY COMMANDS${c.reset}
+${c.cyan}QUALITY${c.reset}
   ${c.green}review${c.reset}                Run code review
   ${c.green}test${c.reset}                  Generate tests
   ${c.green}qa${c.reset}                    Run QA gate
@@ -228,11 +232,10 @@ ${c.cyan}OPTIONS${c.reset}
   --help, -h            Show help
 
 ${c.cyan}EXAMPLES${c.reset}
-  npx aat install                    # Scaffold into current project
-  npx aat init my-project
-  npx aat research --query "nodejs auth starter"
-  npx aat code-review:review --path src/
-  npx aat qa --run-id 20260123_1430_myproject
+  ${c.magenta}npx aat vibe${c.reset}                         # Start vibe mode (interactive)
+  ${c.magenta}npx aat vibe "app đặt lịch nail"${c.reset}     # Vibe with initial description
+  npx aat init my-project              # Advanced: init run
+  npx aat research --query "auth"      # Advanced: search repos
 
 ${c.dim}See 'npx aat skills' for all available skill commands${c.reset}
 `);

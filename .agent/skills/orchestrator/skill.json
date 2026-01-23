@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Pipeline orchestration and environment management",
   "commands": {
+    "vibe": {
+      "script": "scripts/vibe.js",
+      "description": "One-command pipeline for non-technical users",
+      "args": [
+        { "name": "description", "type": "string", "description": "Project description (optional)" }
+      ]
+    },
     "selfcheck": {
       "script": "scripts/selfcheck.js",
       "description": "Validate environment setup",
@@ -23,6 +30,10 @@
       ]
     }
   },
-  "triggers": ["selfcheck", "init run", "/status"],
-  "outputs": []
+  "triggers": ["vibe", "selfcheck", "init run", "/status"],
+  "outputs": [
+    "40_spec/spec.md",
+    "40_spec/task_breakdown.json",
+    "40_spec/NEXT_STEPS.md"
+  ]
 }

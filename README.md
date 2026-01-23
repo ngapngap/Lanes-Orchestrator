@@ -2,56 +2,75 @@
 
 Pipeline hoàn chỉnh cho vòng đời phát triển phần mềm, điều phối bởi AI agents.
 
-## Tổng quan
+---
 
-Bộ kit cung cấp **agents + skills + artifact contracts + gates** để chạy quy trình:
+## Chọn Cách Dùng
 
+### 🎨 Vibe Mode (Khuyến nghị cho người mới)
+
+> Mô tả ý tưởng → Nhận spec + tasks + hướng dẫn. Không cần biết code.
+
+```bash
+npx aat vibe
 ```
-Orchestrator → Ask(Intake) → Architect(Research + Debate + Spec) → Design? → Code → QA Gate → Debug/Security
+
+Hoặc với mô tả sẵn:
+```bash
+npx aat vibe "app đặt lịch cho tiệm nail, khách đặt online"
+```
+
+**Vibe Mode sẽ:**
+1. Hỏi bạn 5 câu đơn giản về dự án
+2. Tự động chạy pipeline (intake → research → spec → tasks)
+3. Xuất ra 3 file:
+   - `spec.md` - Bản mô tả chi tiết cho developer/AI
+   - `task_breakdown.json` - Danh sách việc cần làm
+   - `NEXT_STEPS.md` - Hướng dẫn bước tiếp theo (dễ hiểu)
+
+---
+
+### ⚙️ Advanced Mode (Cho developer muốn kiểm soát)
+
+> Chạy từng bước, debug, can thiệp khi cần.
+
+```bash
+# Khởi tạo run
+npx aat init my-project
+
+# Chạy từng phase
+npx aat intake --run-id <id>
+npx aat research --run-id <id>
+npx aat spec --run-id <id>
+npx aat qa --run-id <id>
+
+# Kiểm tra trạng thái
+npx aat status
 ```
 
 ---
 
 ## Installation
 
-> **Chọn 1 trong 2 cách dưới đây:**
-
-### Option 1: Use in YOUR project (recommended)
-
-Nếu bạn muốn dùng toolkit trong repo có sẵn, **KHÔNG cần clone**:
+### Option 1: Dùng trong project có sẵn (Recommended)
 
 ```bash
 cd /path/to/your-project
 
-# Install as dev dependency
+# Install
 npm i -D ai-agent-toolkit
 
-# Scaffold toolkit files into your repo
+# Scaffold toolkit files
 npx ai-agent-toolkit install
 
-# Setup environment
+# Setup environment (optional, for research feature)
 cp .env.example .env
 # Edit .env with your API keys
 
-# Verify setup
+# Verify
 npx ai-agent-toolkit selfcheck
 ```
 
-**What `install` does:**
-
-Tạo (hoặc update) các folders trong project của bạn:
-- `agents/` - Agent definitions
-- `.agent/skills/` - Skill scripts & manifests
-- `.agent/lib/` - Shared utilities
-- `.agent/mcp/` - MCP servers
-- `schemas/` - JSON schemas
-- `examples/` - Sample artifacts
-- `docs/` - Documentation
-- `artifacts/runs/` - Pipeline run outputs
-
 ### Option 2: Clone repo (for contributors)
-
-Nếu bạn muốn contribute hoặc develop toolkit:
 
 ```bash
 git clone https://github.com/ngapngap/AI-Agent-Toolkit.git
@@ -63,198 +82,124 @@ npx ai-agent-toolkit selfcheck
 
 ---
 
-## Quick Start
+## Environment Setup (Optional)
 
-### 1. Initialize a run
-
-```bash
-npx ai-agent-toolkit init my-project
-```
-
-Output:
-```
-✓ Initialized new run: 20260123_1430_my-project
-  Run directory: artifacts/runs/20260123_1430_my-project/
-
-Export run ID:
-  export RUN_ID=20260123_1430_my-project
-```
-
-### 2. Run pipeline phases
+> API keys chỉ cần cho research phase. Vibe mode vẫn chạy được nếu thiếu.
 
 ```bash
-# Thu thập requirements
-npx ai-agent-toolkit intake --run-id 20260123_1430_my-project
-
-# Research repos/patterns
-npx ai-agent-toolkit research --run-id 20260123_1430_my-project
-
-# Hoặc với query cụ thể
-npx ai-agent-toolkit research --query "nodejs auth starter" --run-id 20260123_1430_my-project
-
-# Generate spec + tasks
-npx ai-agent-toolkit spec --run-id 20260123_1430_my-project
-
-# Run QA gate
-npx ai-agent-toolkit qa --run-id 20260123_1430_my-project
-```
-
-### 3. Check status
-
-```bash
-npx ai-agent-toolkit status 20260123_1430_my-project
-```
-
----
-
-## Run ID Flow
-
-### Run ID là gì?
-
-Run ID là unique identifier cho mỗi pipeline run, format: `YYYYMMDD_HHMM_<slug>`
-
-Ví dụ: `20260123_1430_my-project`
-
-### Tạo Run ID
-
-```bash
-npx ai-agent-toolkit init <project-slug>
-```
-
-Run ID được:
-- Print ra console
-- Dùng để tạo folder: `artifacts/runs/<run_id>/`
-
-### Sử dụng Run ID
-
-**Cách 1: Truyền qua --run-id**
-```bash
-npx ai-agent-toolkit intake --run-id 20260123_1430_my-project
-```
-
-**Cách 2: Set environment variable**
-```bash
-export RUN_ID=20260123_1430_my-project
-npx ai-agent-toolkit intake
-```
-
-**Cách 3: Auto-detect latest run**
-```bash
-# Nếu không có --run-id và không có RUN_ID env,
-# commands sẽ dùng latest run trong artifacts/runs/
-npx ai-agent-toolkit status  # Shows latest run
-```
-
-### List all runs
-
-```bash
-npx ai-agent-toolkit list
-```
-
----
-
-## CLI Commands
-
-```bash
-# Pipeline phases
-npx ai-agent-toolkit init <slug>                    # Initialize new run
-npx ai-agent-toolkit intake --run-id <id>           # Requirements gathering
-npx ai-agent-toolkit research --run-id <id>         # Search repos/patterns
-npx ai-agent-toolkit research --query "..." --run-id <id>  # With custom query
-npx ai-agent-toolkit debate --run-id <id>           # Council decision
-npx ai-agent-toolkit spec --run-id <id>             # Generate specification
-npx ai-agent-toolkit tasks --run-id <id>            # Generate task breakdown
-
-# Quality
-npx ai-agent-toolkit review --path src/ --run-id <id>  # Code review
-npx ai-agent-toolkit test --run-id <id>                # Generate tests
-npx ai-agent-toolkit qa --run-id <id>                  # QA gate
-
-# Management
-npx ai-agent-toolkit list                           # List all runs
-npx ai-agent-toolkit status [run_id]                # Show run status
-npx ai-agent-toolkit selfcheck                      # Validate environment
-npx ai-agent-toolkit skills                         # List all skill commands
-```
-
-**Short form:** `npx aat <command>`
-
-**Skill:command format:** `npx aat <skill>:<command>` (e.g., `npx aat code-review:review`)
-
----
-
-## Environment Setup
-
-### API Keys
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```bash
-# Required for brave-search skill
-BRAVE_API_KEY=your_brave_api_key_here
-
-# Optional - for higher GitHub API rate limits
-GITHUB_TOKEN=your_github_token_here
+# .env
+BRAVE_API_KEY=your_brave_api_key_here    # For web search
+GITHUB_TOKEN=your_github_token_here       # For repo search (higher rate limit)
 ```
 
 **Get API keys:**
 - Brave Search: https://brave.com/search/api/
 - GitHub Token: https://github.com/settings/tokens
 
-### Verify setup
+---
+
+## CLI Commands
+
+### Vibe Mode
+```bash
+npx aat vibe                    # Interactive mode
+npx aat vibe "mô tả dự án"      # With initial description
+```
+
+### Advanced Mode
+```bash
+# Pipeline phases
+npx aat init <slug>             # Initialize new run
+npx aat intake                  # Requirements gathering
+npx aat research                # Search repos/patterns
+npx aat debate                  # Council decision
+npx aat spec                    # Generate specification
+npx aat tasks                   # Generate task breakdown
+
+# Quality
+npx aat review --path src/      # Code review
+npx aat test                    # Generate tests
+npx aat qa                      # QA gate
+
+# Management
+npx aat list                    # List all runs
+npx aat status [run_id]         # Show run status
+npx aat selfcheck               # Validate environment
+npx aat skills                  # List all skill commands
+```
+
+### Run ID
+
+Run ID là unique identifier cho mỗi pipeline run: `YYYYMMDD_HHMM_<slug>`
 
 ```bash
-npx ai-agent-toolkit selfcheck
+# Specify run ID
+npx aat intake --run-id 20260123_1430_my-project
+
+# Or set environment variable
+export RUN_ID=20260123_1430_my-project
+npx aat intake
+
+# Or auto-detect latest run
+npx aat status  # Uses latest run
 ```
 
 ---
 
-## MCP Integration (Claude Desktop)
+## Output Files
 
-MCP servers cho phép Claude Desktop trực tiếp gọi toolkit tools.
+### Vibe Mode Output
 
-> **Note:** Khi dùng MCP, bạn cấu hình API keys trong Claude Desktop config thay vì `.env` của repo.
+| File | Mục đích | Ai cần đọc |
+|------|----------|------------|
+| `spec.md` | Bản mô tả chi tiết dự án | Developer, AI Agent |
+| `task_breakdown.json` | Danh sách việc cần làm | Developer, PM |
+| `NEXT_STEPS.md` | Hướng dẫn bước tiếp theo | Bạn (non-technical) |
 
-### Configuration
+### Advanced Mode Output
 
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "node",
-      "args": ["/absolute/path/to/repo/.agent/mcp/servers/github-server.js"],
-      "env": {
-        "GITHUB_TOKEN": "your_github_token_here"
-      }
-    },
-    "brave-search": {
-      "command": "node",
-      "args": ["/absolute/path/to/repo/.agent/mcp/servers/brave-server.js"],
-      "env": {
-        "BRAVE_API_KEY": "your_brave_api_key_here"
-      }
-    },
-    "artifacts": {
-      "command": "node",
-      "args": ["/absolute/path/to/repo/.agent/mcp/servers/artifacts-server.js"]
-    }
-  }
-}
+```
+artifacts/runs/<run_id>/
+├── 10_intake/
+│   ├── intake.json
+│   └── intake.summary.md
+├── 20_research/
+│   ├── research.shortlist.json
+│   └── research.patterns.md
+├── 40_spec/
+│   ├── spec.md
+│   ├── task_breakdown.json
+│   └── NEXT_STEPS.md
+└── 60_verification/
+    ├── report.json
+    └── summary.md
 ```
 
-### MCP Tools Available
+---
 
-| Server | Tools |
-|--------|-------|
-| github | `github_search_repos`, `github_repo_info`, `github_repo_contents`, `github_create_issue` |
-| brave-search | `brave_web_search`, `brave_news_search` |
-| artifacts | `artifacts_list_runs`, `artifacts_init_run`, `artifacts_get_status`, `artifacts_read`, `artifacts_write` |
+## Pipeline Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  VIBE MODE (1 command)                                      │
+│  npx aat vibe                                               │
+│                                                             │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  │
+│  │  Intake  │ → │ Research │ → │   Spec   │ → │  Tasks   │  │
+│  │ (5 Q&A)  │   │ (GitHub) │   │ (spec.md)│   │ (.json)  │  │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘  │
+│                                     ↓                       │
+│                           NEXT_STEPS.md                     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  ADVANCED MODE (step by step)                               │
+│                                                             │
+│  init → intake → research → debate → spec → tasks → qa     │
+│                     ↓           ↓        ↓        ↓         │
+│               shortlist    decision   spec.md   report      │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -264,12 +209,10 @@ Add to `claude_desktop_config.json`:
 your-project/
 ├── AGENTS.md                    # Agent overview
 ├── RULES.md                     # Global rules
-├── qa.md                        # QA profile
-├── LICENSE_POLICY.md            # License policy
-├── package.json                 # npm package
+├── package.json
 │
 ├── bin/                         # CLI
-│   └── ai-agent-toolkit.js      # Main entrypoint
+│   └── ai-agent-toolkit.js
 │
 ├── agents/                      # Agent definitions (7 agents)
 │   ├── orchestrator.agent.md
@@ -283,118 +226,41 @@ your-project/
 ├── .agent/
 │   ├── lib/utils.js             # Artifact path utilities
 │   ├── mcp/                     # MCP servers
-│   └── skills/                  # Skills (12 skills)
+│   └── skills/                  # Skills
+│       ├── orchestrator/        # vibe, selfcheck, init, status
 │       ├── intake/
 │       ├── research/
-│       ├── debate/
-│       ├── spec-agent/
-│       ├── code-review/
-│       ├── test-generator/
+│       ├── qa-gate/
 │       └── ...
 │
-├── schemas/                     # JSON Schemas
-├── examples/                    # Sample artifacts
-├── docs/                        # Documentation
-│
 └── artifacts/runs/              # Pipeline runs
-    └── <run_id>/
-        ├── 00_user_request.md
-        ├── 10_intake/
-        ├── 20_research/
-        ├── 30_debate/
-        ├── 40_spec/
-        ├── 45_design/
-        ├── 50_implementation/
-        └── 60_verification/
 ```
 
 ---
 
-## Gates
+## MCP Integration (Claude Desktop)
 
-| Gate | Check | Artifacts |
-|------|-------|-----------|
-| intake_ready | intake.json valid | 10_intake/ |
-| reuse_gate_passed | shortlist + assessment valid | 20_research/ |
-| debate_ready_for_spec | debate inputs valid | 30_debate/ |
-| spec_ready | spec.md + DAG valid | 40_spec/ |
-| lane_handoff_ready | handoff bundles complete | 50_implementation/ |
-| qa_passed | report.json.status = pass | 60_verification/ |
+Add to `claude_desktop_config.json`:
 
-## Lanes
-
-| Lane | Responsibility |
-|------|----------------|
-| ui | Frontend, UI components |
-| api | Backend, API endpoints |
-| data | Database, migrations |
-| qa | Testing, quality |
-| security | Security, compliance |
-
-## Agents (7 total)
-
-| Agent | Phases | Description |
-|-------|--------|-------------|
-| Orchestrator | All | Main controller, routing |
-| Ask | Intake | Requirements gathering |
-| Architect | Research, Debate, Spec | Discovery + decision + specification |
-| Design | Design | UI/UX handoff |
-| Code | Implementation | Lane execution |
-| QA Gate | Verification | Quality checks |
-| Debug/Security | Debug | Issue resolution |
-
----
-
-## IDE Integration
-
-### VS Code
-
-`.vscode/tasks.json`:
 ```json
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "AAT: Init",
-      "type": "shell",
-      "command": "npx ai-agent-toolkit init ${input:projectName}"
+  "mcpServers": {
+    "github": {
+      "command": "node",
+      "args": ["/path/to/repo/.agent/mcp/servers/github-server.js"],
+      "env": { "GITHUB_TOKEN": "your_token" }
     },
-    {
-      "label": "AAT: Status",
-      "type": "shell",
-      "command": "npx ai-agent-toolkit status"
+    "brave-search": {
+      "command": "node",
+      "args": ["/path/to/repo/.agent/mcp/servers/brave-server.js"],
+      "env": { "BRAVE_API_KEY": "your_key" }
     },
-    {
-      "label": "AAT: Review",
-      "type": "shell",
-      "command": "npx ai-agent-toolkit review --path ${workspaceFolder}/src"
+    "artifacts": {
+      "command": "node",
+      "args": ["/path/to/repo/.agent/mcp/servers/artifacts-server.js"]
     }
-  ],
-  "inputs": [
-    {
-      "id": "projectName",
-      "type": "promptString",
-      "description": "Project slug for run ID"
-    }
-  ]
+  }
 }
-```
-
-### Cursor / Windsurf / Other AI IDEs
-
-Copy `.agent/` folder và `AGENTS.md` to your project root.
-
----
-
-## Advanced: Direct Script Execution
-
-> **Không khuyến khích** - Chỉ dùng khi debug hoặc develop skills.
-
-```bash
-# Direct script execution (bypasses CLI)
-node .agent/skills/intake/scripts/start-intake.js --run-id <id>
-node .agent/skills/research/scripts/search-github.js --run-id <id>
-node .agent/skills/qa-gate/scripts/run-gate.js --run-id <id>
 ```
 
 ---
@@ -404,9 +270,7 @@ node .agent/skills/qa-gate/scripts/run-gate.js --run-id <id>
 - [AGENTS.md](AGENTS.md) - Full agent reference
 - [RULES.md](RULES.md) - Lane và scope rules
 - [qa.md](qa.md) - QA commands và criteria
-- [LICENSE_POLICY.md](LICENSE_POLICY.md) - License allowlist/blocklist
-- [docs/ORCHESTRATOR_ADAPTER.md](docs/ORCHESTRATOR_ADAPTER.md) - Adapter contract
-- [docs/QA_TRIAGE.md](docs/QA_TRIAGE.md) - Triage protocol
+- [docs/](docs/) - Additional documentation
 
 ## References
 
