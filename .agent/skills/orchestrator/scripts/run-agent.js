@@ -101,8 +101,17 @@ function getLogStream(filePath) {
 }
 
 function writeLog(filePath, message) {
-    const stream = getLogStream(filePath);
-    stream.write(message);
+    try {
+        const stream = getLogStream(filePath);
+        stream.write(message);
+    } catch (e) {
+        // Fallback to simple append if stream fails
+        try {
+            fs.appendFileSync(filePath, message, 'utf8');
+        } catch (err) {
+            // Ignore log errors to prevent agent crash
+        }
+    }
 }
 
 function logRaw(message, noNewline = false) {

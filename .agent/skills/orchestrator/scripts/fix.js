@@ -157,6 +157,9 @@ const parseDodMetadata = (dodContent) => {
     let inArray = false;
 
     for (const line of lines) {
+        // Handle comments
+        if (line.trim().startsWith('#')) continue;
+
         const keyMatch = line.match(/^([a-z_]+):\s*(.*)$/);
         if (keyMatch) {
             currentKey = keyMatch[1];
@@ -167,6 +170,7 @@ const parseDodMetadata = (dodContent) => {
             } else if (value.startsWith('[') && value.endsWith(']')) {
                 // Inline array
                 metadata[currentKey] = value.slice(1, -1).split(',').map(s => s.trim().replace(/"/g, ''));
+                inArray = false;
             } else {
                 metadata[currentKey] = value.replace(/"/g, '');
                 inArray = false;
@@ -184,12 +188,15 @@ const parseDodMetadata = (dodContent) => {
 
 // Load legacy QA report (fallback)
 const loadReport = (runId) => {
-    const reportPath = path.join(utils.getArtifactPath(runId, 'verification'), 'report.json');
+    const reportPath = path.join(utils.getArtifactPath(runId, 'verification'), 'verification.report.json');
     if (!fs.existsSync(reportPath)) {
         return null;
     }
     try {
-        return JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+        const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+        // Standardize legacy report to match schema expectations if needed
+        if (!report.status && report.overall_status) report.status = report.overall_status;
+        return report;
     } catch (e) {
         return null;
     }

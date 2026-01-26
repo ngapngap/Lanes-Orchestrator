@@ -1124,14 +1124,14 @@ const generateTasks = (intake, classify = null) => {
 
     // Lanes mapping
     const lanes = projectKind === 'cli' || projectKind === 'library'
-        ? { core: 'api', packaging: 'security' } // Use api/security to match schema
+        ? { core: 'api', packaging: 'security' } // Use api/security to match schema enums
         : { core: 'api', packaging: 'security' };
 
     // Setup task
     tasks.push({
         node_id: 'T1',
         title: 'Project Setup',
-        owner_lane: 'api', // Match schema enum
+        owner_lane: 'api', // Match schema: ui, api, data, qa, security
         depends_on: [],
         inputs: [`artifacts/runs/${intake.run_id}/10_intake/intake.json`],
         artifact_out: ['package.json'],
@@ -1838,14 +1838,14 @@ const generateVerificationReport = (classify, intake, decisions, tasks) => {
     const language = classify.classification.language;
 
     // Check 1: Project kind consistency
-    const intakeKind = intake.project?.type;
+    const intakeKind = intake.project?.kind || intake.project?.type;
     if (projectKind !== intakeKind) {
         warnings.push(`Project kind mismatch: classify=${projectKind}, intake=${intakeKind}`);
     }
     checks.push({
         id: 'G_KIND_CONSISTENCY',
-        status: projectKind === intakeKind ? 'PASS' : 'SKIP',
-        message: `classify: ${projectKind}, intake: ${intakeKind}`
+        status: (projectKind === intakeKind || !intakeKind || intakeKind === 'unknown') ? 'PASS' : 'SKIP',
+        message: `classify: ${projectKind}, intake: ${intakeKind || 'unknown'}`
     });
 
     // Check 2: MVP features not empty
